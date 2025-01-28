@@ -30,7 +30,8 @@ export default function FileUploadForm() {
     setError(null);
   };
 
-  const handleUpload = async () => {
+  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     if (!files || files.length === 0) {
       setError('Please select files to upload');
       return;
@@ -70,7 +71,7 @@ export default function FileUploadForm() {
       await Promise.all(uploadPromises);
       router.refresh();
       setFiles(null);
-      if (e.target.form) e.target.form.reset();
+      (e.target as HTMLFormElement).reset();
     } catch (err) {
       console.error('Upload error:', err);
       setError('Failed to upload files');
@@ -86,7 +87,7 @@ export default function FileUploadForm() {
         Upload PDF documents and audio files here
       </div>
 
-      <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleUpload(); }}>
+      <form className="space-y-6" onSubmit={handleUpload}>
         <div className="border-2 border-dashed border-accent rounded-lg p-6">
           <input
             type="file"
