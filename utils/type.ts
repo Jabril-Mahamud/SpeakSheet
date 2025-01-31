@@ -8,3 +8,8 @@ type UploadFormProps = {
   uploading: boolean;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 };
+export type TtsSettings = {
+  id: string;
+  tts_service: string;
+  api_key: string;
+};

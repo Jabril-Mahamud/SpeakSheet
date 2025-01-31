@@ -1,3 +1,4 @@
+import TtsSettingsForm from "@/components/common/TtsSettingsForm";
 import { createClient } from "@/utils/supabase/server";
 import { InfoIcon } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -29,7 +30,8 @@ export default async function ProtectedPage() {
         </pre>
       </div>
       <div>
-        <h2 className="font-bold text-2xl mb-4">Next steps</h2>
+        <h2 className="font-bold text-2xl mb-4">Speaker API Service</h2>
+        <TtsSettingsForm />
       </div>
     </div>
   );
