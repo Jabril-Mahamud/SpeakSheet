@@ -52,7 +52,7 @@ export default function ConversionInterface({ initialFiles }: { initialFiles: Fi
 
       // Update status to converting
       const { error: updateError } = await supabase
-        .from('user_files')
+        .from('files')
         .update({ 
           conversion_status: 'converting (0/0 chunks)',
           voice_id: selectedVoiceId,
@@ -86,7 +86,7 @@ export default function ConversionInterface({ initialFiles }: { initialFiles: Fi
       
       // Update status to error
       await supabase
-        .from('user_files')
+        .from('files')
         .update({ 
           conversion_status: 'error',
           conversion_error: error instanceof Error ? error.message : 'Unknown error' 

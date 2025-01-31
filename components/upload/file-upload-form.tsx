@@ -57,8 +57,9 @@ export default function FileUploadForm() {
         if (uploadError) throw uploadError;
 
         const { error: dbError } = await supabase
-          .from('user_files')
+          .from('files')
           .insert({
+            id: crypto.randomUUID(),
             user_id: user.id,
             file_path: filePath,
             file_type: file.type,
