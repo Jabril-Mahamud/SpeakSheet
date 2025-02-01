@@ -5,7 +5,13 @@ const nextConfig = {
     webpack: (config) => {
       config.resolve.alias.canvas = false
       return config
-    }
+    },
+    experimental: {
+      turbo: {
+        // ...
+      },
+    },
+
   }
   
   module.exports = nextConfig

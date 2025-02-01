@@ -1,6 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { TtsSettings } from "@/utils/type"; // Import your existing type
+import { TtsSettings } from "@/utils/types"; 
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();

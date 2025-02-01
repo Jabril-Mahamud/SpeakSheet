@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { InfoIcon } from "lucide-react";
-import { TtsSettings } from "@/utils/type";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { TtsSettings } from "@/utils/types";
 
 export default function TtsSettingsForm() {
   const [ttsSettings, setTtsSettings] = useState<TtsSettings | null>(null);
