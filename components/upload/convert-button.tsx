@@ -1,3 +1,4 @@
+// components/upload/convert-button.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -13,44 +14,33 @@ interface ConvertButtonProps {
   disabled?: boolean;
 }
 
-export default function ConvertButton({
+export function ConvertButton({
   text,
   fileName,
   onProgress,
   onComplete,
   onError,
-  disabled
+  disabled,
 }: ConvertButtonProps) {
   const [converting, setConverting] = useState(false);
 
   const handleConvert = async (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent any default navigation
+    e.preventDefault();
     try {
       setConverting(true);
       onProgress(33);
 
       const response = await fetch("/api/convert-audio", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text,
-          voiceId: "Matthew"
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voiceId: "Matthew" }),
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
+      if (!response.ok) throw new Error(await response.text());
 
       onProgress(66);
       const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (data.error) throw new Error(data.error);
 
       onProgress(100);
       onComplete();

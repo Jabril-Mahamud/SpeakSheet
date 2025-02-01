@@ -1,9 +1,9 @@
-// components/upload/delete-button.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
 import { Trash2, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { createClient } from "@/utils/supabase/client"; 
 
 interface DeleteButtonProps {
   filePath: string;
@@ -31,27 +31,25 @@ export default function DeleteButton({
 
     try {
       setDeleting(true);
-
-      const response = await fetch("/api/delete-file", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          filePath,
-          fileId
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+      const supabase = createClient();
+      
+      // Remove from storage
+      const { error: storageError } = await supabase.storage
+        .from('files') // Replace with your bucket name
+        .remove([filePath]);
+      
+      if (storageError) {
+        throw new Error(storageError.message);
       }
 
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
+      // Delete the database record if needed
+      const { error: dbError } = await supabase
+        .from('files') // Replace with your table name
+        .delete()
+        .match({ id: fileId });
+
+      if (dbError) {
+        throw new Error(dbError.message);
       }
 
       onComplete();

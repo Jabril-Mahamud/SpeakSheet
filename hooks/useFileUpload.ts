@@ -1,118 +1,59 @@
-import { useState } from 'react';
+// hooks/useFileUpload.ts
+import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { useRouter } from "next/navigation";
-import { convertPdfToText } from '@/utils/fileUtils';
+import { UploadProgress } from "@/utils/types";
 
-export const useFileUpload = () => {
+
+export function useFileUpload() {
   const [files, setFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgress>>({});
+  const [convertedFiles, setConvertedFiles] = useState<Record<string, string>>({});
   const supabase = createClient();
-  const router = useRouter();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files;
-    if (!selectedFiles) return;
-
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      const fileType = file.type;
-      if (!fileType.includes('pdf') && !fileType.includes('audio')) {
-        setError('Only PDF and audio files are allowed');
-        return;
-      }
-    }
-
-    setFiles(selectedFiles);
-    setError(null);
+  const updateFileProgress = (fileName: string, updates: Partial<UploadProgress>) => {
+    setUploadProgress((prev) => ({
+      ...prev,
+      [fileName]: { ...prev[fileName], ...updates },
+    }));
   };
 
-  const uploadFile = async (file: File, user: any) => {
-    if (file.type.includes('pdf')) {
-      const textContent = await convertPdfToText(file);
-      const textBlob = new Blob([textContent], { type: 'text/plain' });
-      const textFileName = file.name.replace('.pdf', '.txt');
-      const textFile = new File([textBlob], textFileName, { type: 'text/plain' });
-
-      const fileName = `${Math.random()}.txt`;
-      const filePath = `${user.id}/text/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('files')
-        .upload(filePath, textFile);
-
-      if (uploadError) throw uploadError;
-
-      const { error: dbError } = await supabase
-        .from('files')
-        .insert({
-          id: crypto.randomUUID(),
-          user_id: user.id,
-          file_path: filePath,
-          file_type: 'text/plain',
-          original_name: textFileName,
-        });
-
-      if (dbError) throw dbError;
-    } else {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${user.id}/audio/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('files')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { error: dbError } = await supabase
-        .from('files')
-        .insert({
-          id: crypto.randomUUID(),
-          user_id: user.id,
-          file_path: filePath,
-          file_type: file.type,
-          original_name: file.name,
-        });
-
-      if (dbError) throw dbError;
-    }
-  };
-
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!files || files.length === 0) {
-      setError('Please select files to upload');
-      return;
-    }
-
+  const convertPdfToText = async (file: File): Promise<string> => {
     try {
-      setUploading(true);
-      setError(null);
+      updateFileProgress(file.name, { status: "converting", progress: 33 });
+      const formData = new FormData();
+      formData.append("file", file);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
+      const response = await fetch("/api/convert-pdf", {
+        method: "POST",
+        body: formData,
+      });
 
-      const uploadPromises = Array.from(files).map(file => uploadFile(file, user));
-      await Promise.all(uploadPromises);
-      
-      router.refresh();
-      setFiles(null);
-      return true;
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError('Failed to upload files');
-      return false;
-    } finally {
-      setUploading(false);
+      if (!response.ok) throw new Error("Conversion failed");
+
+      const { text } = await response.json();
+      updateFileProgress(file.name, { progress: 66, status: "processing" });
+      return text;
+    } catch (error) {
+      console.error("PDF conversion error:", error);
+      updateFileProgress(file.name, { status: "error" });
+      throw new Error("Failed to convert PDF to text");
     }
   };
 
   return {
     files,
+    setFiles,
     uploading,
+    setUploading,
     error,
-    handleFileChange,
-    handleUpload
+    setError,
+    uploadProgress,
+    convertedFiles,
+    setConvertedFiles,
+    updateFileProgress,
+    convertPdfToText,
+    supabase,
   };
-};
+}

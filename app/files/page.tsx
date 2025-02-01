@@ -69,10 +69,12 @@ export default async function ViewPage({
         <div className="mb-6 flex items-center justify-between">
           <h1 className="font-bold text-3xl">Your Files</h1>
           <UploadModal>
-            <Button size="lg">
+            <div className="p-5">
+            <Button size="default">
               <Plus className="mr-2 h-4 w-4" />
               Upload Files
             </Button>
+            </div>
           </UploadModal>
         </div>
         
