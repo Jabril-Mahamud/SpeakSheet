@@ -1,7 +1,6 @@
 "use client";
-
 import { useState } from "react";
-import { File, FileAudio, Download, ExternalLink, Trash2 } from "lucide-react";
+import { File, Download, FileAudio, X, Loader2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { getFileIcon } from "../common/FileIcon";
 import {
@@ -9,9 +8,25 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDate } from "@/utils/dateFormat";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "@/hooks/use-toast";
+import DeleteButton from "./delete-button";
 
 interface FileData {
   id: string;
@@ -27,8 +42,9 @@ export default function FileGrid({ files }: { files: FileData[] }) {
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
   const [viewLoading, setViewLoading] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const supabase = createClient();
-  const [audioLoading, setAudioLoading] = useState<string | null>(null);
+  const router = useRouter();
 
   const filteredFiles = files.filter((file) => {
     if (filter === "all") return true;
@@ -55,7 +71,11 @@ export default function FileGrid({ files }: { files: FileData[] }) {
       }
     } catch (error) {
       console.error("Error loading file:", error);
-      setFileContent("Error loading file content");
+      toast({
+        title: "Error",
+        description: "Failed to load file content. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setViewLoading(false);
     }
@@ -78,40 +98,55 @@ export default function FileGrid({ files }: { files: FileData[] }) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+
+      toast({
+        title: "Success",
+        description: "File downloaded successfully",
+      });
     } catch (error) {
       console.error("Download error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to download file. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(null);
     }
   };
 
-  const handleAudioConvert = async (file: FileData) => {
+  const handleConvertToAudio = async () => {
+    if (!selectedFile || !fileContent) return;
+
     try {
-      setAudioLoading(file.id);
-      
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from('files')
-        .download(file.file_path);
-  
-      if (downloadError) throw downloadError;
-      const text = await fileData.text();
-      
-      const response = await fetch('/api/convert-audio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      setIsConverting(true);
+      const response = await fetch("/api/convert-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text,
-          voiceId: 'Xb7hH8MSUJpSbSDYk0k2'
-        })
+          text: fileContent,
+          voiceId: "Matthew",
+        }),
       });
-  
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      window.open(result.audioUrl, '_blank');
+
+      if (!response.ok) {
+        throw new Error("Failed to convert to audio");
+      }
+
+      toast({
+        title: "Success",
+        description: "Text converted to audio successfully",
+      });
+      router.refresh();
     } catch (error) {
-      console.error('Audio conversion error:', error);
+      console.error("Conversion error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to convert text to audio. Please try again.",
+        variant: "destructive",
+      });
     } finally {
-      setAudioLoading(null);
+      setIsConverting(false);
     }
   };
 
@@ -129,13 +164,13 @@ export default function FileGrid({ files }: { files: FileData[] }) {
             active={filter === "txt"}
             onClick={() => setFilter("txt")}
           >
-            txts
+            Text Files
           </FilterButton>
           <FilterButton
             active={filter === "audio"}
             onClick={() => setFilter("audio")}
           >
-            Audio
+            Audio Files
           </FilterButton>
         </div>
 
@@ -162,35 +197,22 @@ export default function FileGrid({ files }: { files: FileData[] }) {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
+                  <Button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDownload(file);
                     }}
                     disabled={loading === file.id}
-                    className="p-2 hover:bg-background/50 rounded-md"
+                    variant="ghost"
+                    size="icon"
                     title="Download"
                   >
-                    <Download size={18} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAudioConvert(file);
-                    }}
-                    disabled={
-                      audioLoading === file.id ||
-                      file.file_type !== "text/plain"
-                    }
-                    className="p-2 hover:bg-background/50 rounded-md disabled:opacity-50"
-                    title="Convert to Audio"
-                  >
-                    {audioLoading === file.id ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-foreground" />
+                    {loading === file.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <FileAudio size={18} />
+                      <Download className="h-4 w-4" />
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -198,16 +220,63 @@ export default function FileGrid({ files }: { files: FileData[] }) {
         )}
       </div>
 
-      <Dialog open={!!selectedFile} onOpenChange={() => setSelectedFile(null)}>
+      <Dialog
+        open={!!selectedFile}
+        onOpenChange={(open) => !open && setSelectedFile(null)}
+      >
         <DialogContent className="max-w-4xl h-[80vh]">
-          <DialogHeader>
+          <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <DialogTitle>{selectedFile?.original_name}</DialogTitle>
+            {selectedFile && selectedFile.file_type === "text/plain" && (
+              <div className="flex gap-2 pr-8">
+                <Button
+                  onClick={async () => {
+                    if (!selectedFile || !fileContent) return;
+
+                    try {
+                      const response = await fetch("/api/convert-audio", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          text: fileContent,
+                          voiceId: "Matthew",
+                        }),
+                      });
+
+                      if (!response.ok) {
+                        throw new Error("Failed to convert to audio");
+                      }
+
+                      router.refresh();
+                    } catch (error) {
+                      console.error("Conversion error:", error);
+                    }
+                  }}
+                  size="sm"
+                  variant="secondary"
+                >
+                  <FileAudio className="h-4 w-4 mr-2" />
+                  Convert to Audio
+                </Button>
+                <DeleteButton
+                  filePath={selectedFile.file_path}
+                  fileId={selectedFile.id}
+                  onComplete={() => {
+                    setSelectedFile(null);
+                    router.refresh();
+                  }}
+                  onError={(error) => {
+                    console.error("Delete error:", error);
+                  }}
+                />
+              </div>
+            )}
           </DialogHeader>
 
           <ScrollArea className="flex-1 w-full">
             {viewLoading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : selectedFile?.file_type === "text/plain" ? (
               <div className="p-4 whitespace-pre-wrap font-mono text-sm">
@@ -235,15 +304,12 @@ function FilterButton({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       onClick={onClick}
-      className={`px-4 py-2 rounded-md text-sm ${
-        active
-          ? "bg-foreground text-background"
-          : "bg-accent/50 hover:bg-accent"
-      }`}
+      variant={active ? "default" : "secondary"}
+      size="sm"
     >
       {children}
-    </button>
+    </Button>
   );
 }

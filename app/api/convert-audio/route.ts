@@ -1,5 +1,65 @@
+// app/api/convert-audio/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { 
+  PollyClient, 
+  SynthesizeSpeechCommand, 
+  VoiceId,
+  SynthesizeSpeechCommandInput
+} from "@aws-sdk/client-polly"
+import { Readable } from 'stream'
+
+const pollyClient = new PollyClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+  }
+})
+
+const chunkText = (text: string, maxLength: number = 2900): string[] => {
+  if (text.length <= maxLength) return [text];
+  
+  const chunks: string[] = [];
+  let currentChunk = '';
+  
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length > maxLength) {
+      if (currentChunk) {
+        chunks.push(currentChunk.trim());
+        currentChunk = '';
+      }
+      if (sentence.length > maxLength) {
+        const words = sentence.split(' ');
+        let tempChunk = '';
+        
+        for (const word of words) {
+          if ((tempChunk + ' ' + word).length > maxLength) {
+            chunks.push(tempChunk.trim());
+            tempChunk = word;
+          } else {
+            tempChunk += (tempChunk ? ' ' : '') + word;
+          }
+        }
+        if (tempChunk) {
+          currentChunk = tempChunk;
+        }
+      } else {
+        currentChunk = sentence;
+      }
+    } else {
+      currentChunk += sentence;
+    }
+  }
+  
+  if (currentChunk) {
+    chunks.push(currentChunk.trim());
+  }
+  
+  return chunks;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,41 +70,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { text, voiceId } = await request.json()
-    
-    if (!text || !voiceId) {
-      return NextResponse.json({ error: 'Missing text or voiceId' }, { status: 400 })
+    const { text, voiceId = 'Matthew' } = await request.json()
+   
+    if (!text) {
+      return NextResponse.json({ error: 'Missing text' }, { status: 400 })
     }
 
-    console.log('Making ElevenLabs request with voiceId:', voiceId)
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': process.env.ELEVENLABS_API_KEY!
-      },
-      body: JSON.stringify({
-        text,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.5
-        }
+    console.log('Making AWS Polly request with voiceId:', voiceId)
+
+    const textChunks = chunkText(text);
+    const audioChunks: Buffer[] = [];
+
+    for (const chunk of textChunks) {
+      const input: SynthesizeSpeechCommandInput = {
+        Engine: 'neural',
+        OutputFormat: 'mp3',
+        Text: chunk,
+        VoiceId: voiceId as VoiceId,
+        TextType: 'text'
+      }
+
+      const command = new SynthesizeSpeechCommand(input)
+      const response = await pollyClient.send(command)
+
+      if (!response.AudioStream) {
+        throw new Error('No audio stream returned from AWS Polly')
+      }
+
+      const stream = response.AudioStream as unknown as Readable
+      const chunkBuffers: Buffer[] = []
+      
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (data) => chunkBuffers.push(Buffer.from(data)))
+        stream.on('end', () => resolve())
+        stream.on('error', reject)
       })
-    })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('ElevenLabs error:', response.status, errorText)
-      throw new Error(`ElevenLabs API error: ${errorText}`)
+      audioChunks.push(Buffer.concat(chunkBuffers))
     }
 
-    const audioBuffer = await response.arrayBuffer()
-    const fileName = `${user.id}/${Date.now()}.mp3`
+    const finalAudioBuffer = Buffer.concat(audioChunks)
+    const timestamp = Date.now()
+    const originalName = `audio_${timestamp}.mp3`
+    const fileName = `${user.id}/audio/${timestamp}.mp3`
 
     const { error: uploadError } = await supabase.storage
-      .from('audio')
-      .upload(fileName, audioBuffer, {
+      .from('files')
+      .upload(fileName, finalAudioBuffer, {
         contentType: 'audio/mpeg',
         upsert: true
       })
@@ -54,14 +126,27 @@ export async function POST(request: NextRequest) {
       throw new Error(`Audio upload error: ${uploadError.message}`)
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('audio')
-      .getPublicUrl(fileName)
+    const { data: fileRecord, error: dbError } = await supabase
+      .from("files")
+      .insert({
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        file_path: fileName,
+        file_type: 'audio/mpeg',
+        original_name: originalName,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (dbError) {
+      throw new Error(`Database error: ${dbError.message}`);
+    }
 
     return NextResponse.json({
       success: true,
-      audioUrl: publicUrl
-    })
+      fileId: fileRecord.id
+    });
 
   } catch (error) {
     console.error('[Audio Conversion Error]:', error)

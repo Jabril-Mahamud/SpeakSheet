@@ -13,3 +13,14 @@ export type TtsSettings = {
   tts_service: string;
   api_key: string;
 };
+interface FileRecord {
+  id: string;
+  file_path: string;
+}
+
+interface UploadProgress {
+  fileName: string;
+  progress: number;
+  status: "uploading" | "converting" | "processing" | "complete" | "error";
+  fileRecord?: FileRecord;
+}

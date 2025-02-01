@@ -10,7 +10,7 @@ interface FileData {
 
 export default function FileStats({ files }: { files: FileData[] }) {
   const totalFiles = files.length;
-  const pdfCount = files.filter(f => f.file_type.includes('pdf')).length;
+  const pdfCount = files.filter(f => f.file_type.includes('text')).length;
   const audioCount = files.filter(f => f.file_type.includes('audio')).length;
   
   // Get files uploaded in the last 7 days

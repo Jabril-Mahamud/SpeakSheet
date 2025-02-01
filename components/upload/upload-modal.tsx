@@ -8,15 +8,100 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
-import { InfoIcon, Upload, Loader2 } from "lucide-react";
+import { InfoIcon, Upload, Loader2, Headphones, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+
+interface FileRecord {
+  id: string;
+  file_path: string;
+}
 
 interface UploadProgress {
   fileName: string;
   progress: number;
   status: "uploading" | "converting" | "processing" | "complete" | "error";
+  fileRecord?: FileRecord;
+}
+
+// Convert to Audio Button Component
+function ConvertButton({
+  text,
+  fileName,
+  onProgress,
+  onComplete,
+  onError,
+  disabled,
+}: {
+  text: string;
+  fileName: string;
+  onProgress: (progress: number) => void;
+  onComplete: () => void;
+  onError: (error: string) => void;
+  disabled?: boolean;
+}) {
+  const [converting, setConverting] = useState(false);
+
+  const handleConvert = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      setConverting(true);
+      onProgress(33);
+
+      const response = await fetch("/api/convert-audio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          voiceId: "Matthew",
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+
+      onProgress(66);
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      onProgress(100);
+      onComplete();
+    } catch (error) {
+      console.error("Conversion error:", error);
+      onError(
+        error instanceof Error ? error.message : "Failed to convert to audio"
+      );
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  return (
+    <Button
+      onClick={handleConvert}
+      disabled={disabled || converting}
+      variant="secondary"
+      size="sm"
+      className="ml-2"
+      type="button"
+    >
+      {converting ? (
+        <Loader2 size={16} className="animate-spin mr-2" />
+      ) : (
+        <Headphones size={16} className="mr-2" />
+      )}
+      {converting ? "Converting..." : "Convert to Audio"}
+    </Button>
+  );
 }
 
 export default function UploadModal({
@@ -28,11 +113,30 @@ export default function UploadModal({
   const [files, setFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<
-    Record<string, UploadProgress>
-  >({});
+  const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgress>>({});
+  const [convertedFiles, setConvertedFiles] = useState<Record<string, string>>({});
   const supabase = createClient();
   const router = useRouter();
+
+  const resetModal = () => {
+    setFiles(null);
+    setUploadProgress({});
+    setConvertedFiles({});
+    setError(null);
+  };
+
+  const checkAllFilesComplete = () => {
+    if (!files) return false;
+    return Array.from(files).every(
+      file => uploadProgress[file.name]?.status === 'complete'
+    );
+  };
+
+  const handleCloseModal = () => {
+    setOpen(false);
+    // Reset the modal state after it's closed
+    setTimeout(resetModal, 300); // Wait for dialog close animation
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
@@ -48,29 +152,10 @@ export default function UploadModal({
       }
     }
 
-    // Create unique names for files
-    const uniqueFiles = Array.from(selectedFiles).reduce<Record<string, File>>(
-      (acc, file) => {
-        let uniqueName = file.name;
-        let counter = 1;
-
-        while (acc[uniqueName]) {
-          const nameParts = file.name.split(".");
-          const ext = nameParts.pop();
-          const baseName = nameParts.join(".");
-          uniqueName = `${baseName} (${counter}).${ext}`;
-          counter++;
-        }
-
-        acc[uniqueName] = file;
-        return acc;
-      },
-      {}
-    );
-
     setFiles(selectedFiles);
     setError(null);
     setUploadProgress({});
+    setConvertedFiles({});
   };
 
   const updateFileProgress = (
@@ -138,89 +223,104 @@ export default function UploadModal({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
-      const uploadPromises = Array.from(files).map(async (file) => {
-        try {
-          if (file.type.includes("pdf")) {
-            const textContent = await convertPdfToText(file);
-            const textBlob = new Blob([textContent], { type: "text/plain" });
-            const textFileName = file.name.replace(".pdf", ".txt");
-            const textFile = new File([textBlob], textFileName, {
-              type: "text/plain",
-            });
+      await Promise.all(
+        Array.from(files).map(async (file) => {
+          try {
+            if (file.type.includes("pdf")) {
+              const textContent = await convertPdfToText(file);
+              const textBlob = new Blob([textContent], { type: "text/plain" });
+              const textFileName = file.name.replace(".pdf", ".txt");
+              const textFile = new File([textBlob], textFileName, {
+                type: "text/plain",
+              });
 
-            const fileName = `${Math.random()}.txt`;
-            const filePath = `${user.id}/text/${fileName}`;
+              const fileName = `${user.id}/text/${Math.random()}.txt`;
 
-            const { error: uploadError } = await supabase.storage
-              .from("files")
-              .upload(filePath, textFile);
+              const { error: uploadError } = await supabase.storage
+                .from("files")
+                .upload(fileName, textFile);
 
-            if (uploadError) throw uploadError;
+              if (uploadError) throw uploadError;
 
-            const { error: dbError } = await supabase.from("files").insert({
-              id: crypto.randomUUID(),
-              user_id: user.id,
-              file_path: filePath,
-              file_type: "text/plain",
-              original_name: textFileName,
-              created_at: new Date().toISOString(),
-            });
+              const { data: fileRecord, error: dbError } = await supabase
+                .from("files")
+                .insert({
+                  id: crypto.randomUUID(),
+                  user_id: user.id,
+                  file_path: fileName,
+                  file_type: "text/plain",
+                  original_name: textFileName,
+                  created_at: new Date().toISOString(),
+                })
+                .select()
+                .single();
 
-            if (dbError) throw dbError;
+              if (dbError) throw dbError;
 
-            updateFileProgress(file.name, {
-              progress: 100,
-              status: "complete",
-            });
-          } else {
-            updateFileProgress(file.name, { status: "uploading" });
-            const fileExt = file.name.split(".").pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `${user.id}/audio/${fileName}`;
+              setConvertedFiles((prev) => ({
+                ...prev,
+                [file.name]: textContent,
+              }));
 
-            const { error: uploadError } = await supabase.storage
-              .from("files")
-              .upload(filePath, file);
+              updateFileProgress(file.name, {
+                progress: 100,
+                status: "complete",
+                fileRecord: {
+                  id: fileRecord.id,
+                  file_path: fileName,
+                },
+              });
+            } else {
+              updateFileProgress(file.name, { status: "uploading" });
+              const fileExt = file.name.split(".").pop();
+              const fileName = `${user.id}/audio/${Math.random()}.${fileExt}`;
 
-            if (uploadError) throw uploadError;
+              const { error: uploadError } = await supabase.storage
+                .from("files")
+                .upload(fileName, file);
 
-            const { error: dbError } = await supabase.from("files").insert({
-              id: crypto.randomUUID(),
-              user_id: user.id,
-              file_path: filePath,
-              file_type: file.type,
-              original_name: file.name,
-              created_at: new Date().toISOString(),
-            });
+              if (uploadError) throw uploadError;
 
-            if (dbError) throw dbError;
+              const { data: fileRecord, error: dbError } = await supabase
+                .from("files")
+                .insert({
+                  id: crypto.randomUUID(),
+                  user_id: user.id,
+                  file_path: fileName,
+                  file_type: file.type,
+                  original_name: file.name,
+                  created_at: new Date().toISOString(),
+                })
+                .select()
+                .single();
 
-            updateFileProgress(file.name, {
-              progress: 100,
-              status: "complete",
-            });
+              if (dbError) throw dbError;
+
+              updateFileProgress(file.name, {
+                progress: 100,
+                status: "complete",
+                fileRecord: {
+                  id: fileRecord.id,
+                  file_path: fileName,
+                },
+              });
+            }
+          } catch (error) {
+            console.error("File upload error:", error);
+            updateFileProgress(file.name, { status: "error" });
+            throw error;
           }
-        } catch (error) {
-          console.error("File upload error:", error);
-          updateFileProgress(file.name, { status: "error" });
-          throw error;
-        }
-      });
+        })
+      );
 
-      await Promise.all(uploadPromises);
-
-      // Wait a moment to show completion state before closing
-      setTimeout(() => {
+      // Check if all files are complete
+      if (checkAllFilesComplete()) {
         router.refresh();
-        setOpen(false);
-        setFiles(null);
-        setUploadProgress({});
-
-        // Additional refresh after a delay
         setTimeout(() => {
-          router.refresh();
-        }, 500);
-      }, 1000);
+          handleCloseModal();
+        }, 1000); // Give user a moment to see completion
+      }
+
     } catch (err) {
       console.error("Upload error:", err);
       setError("Failed to upload files");
@@ -247,7 +347,14 @@ export default function UploadModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!uploading) { // Prevent closing while uploading
+        setOpen(isOpen);
+        if (!isOpen) {
+          handleCloseModal();
+        }
+      }
+    }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
@@ -287,28 +394,59 @@ export default function UploadModal({
                 <div className="space-y-4">
                   {Array.from(files).map((file, i) => {
                     const progress = uploadProgress[file.name];
+                    const convertedText = convertedFiles[file.name];
+                    const showButtons =
+                      progress?.status === "complete" && progress.fileRecord;
+                    const isText = file.type.includes("pdf");
+
                     return (
                       <div key={i} className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="truncate max-w-[300px]">
-                            {file.name}
-                          </span>
-                          <span className="text-muted-foreground ml-2 shrink-0">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </span>
-                        </div>
-                        {progress && (
-                          <div className="space-y-1">
-                            <Progress
-                              value={progress.progress}
-                              className="h-1"
-                            />
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                              <span>{getStatusText(progress.status)}</span>
-                              <span>{progress.progress}%</span>
+                        <div className="flex justify-between items-center">
+                          <div className="flex-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="truncate max-w-[300px]">
+                                {file.name}
+                              </span>
+                              <span className="text-muted-foreground ml-2 shrink-0">
+                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                              </span>
                             </div>
+                            {progress && (
+                              <div className="space-y-1">
+                                <Progress
+                                  value={progress.progress}
+                                  className="h-1"
+                                />
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                  <span>{getStatusText(progress.status)}</span>
+                                  <span>{progress.progress}%</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        )}
+                          {showButtons && (
+                            <div className="flex gap-2">
+                              {isText && convertedText && (
+                                <ConvertButton
+                                  text={convertedText}
+                                  fileName={file.name}
+                                  onProgress={(progress) => {
+                                    updateFileProgress(file.name, { progress });
+                                  }}
+                                  onComplete={() => {
+                                    router.refresh();
+                                  }}
+                                  onError={(error) => {
+                                    setError(error);
+                                    updateFileProgress(file.name, {
+                                      status: "error",
+                                    });
+                                  }}
+                                />
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -316,18 +454,19 @@ export default function UploadModal({
               </div>
             )}
 
-            <button
+            <Button
               type="submit"
               disabled={!files || uploading}
-              className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full"
+              size="lg"
             >
               {uploading ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Upload size={16} />
+                <Upload className="mr-2 h-4 w-4" />
               )}
               {uploading ? "Uploading..." : "Upload Files"}
-            </button>
+            </Button>
           </form>
         </div>
       </DialogContent>
