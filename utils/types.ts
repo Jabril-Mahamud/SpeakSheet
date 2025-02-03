@@ -44,3 +44,18 @@ export interface FileProgressListProps {
   onConvertComplete: () => void;
   onConvertError: (error: string) => void;
 }
+
+export interface FileDialogProps {
+  title?: string;
+  file?: {
+    id: string;
+    file_path: string;
+    file_type: string;
+    original_name: string;
+    created_at: string; 
+  } | null;
+  mode?: 'upload' | 'view';
+  open: boolean;
+  onOpenChange?: (open: boolean) => void;
+  content?: string;
+}

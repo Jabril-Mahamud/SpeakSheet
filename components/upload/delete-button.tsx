@@ -3,7 +3,18 @@
 import { Button } from "@/components/ui/button";
 import { Trash2, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { createClient } from "@/utils/supabase/client"; 
+import { createClient } from "@/utils/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface DeleteButtonProps {
   filePath: string;
@@ -11,6 +22,7 @@ interface DeleteButtonProps {
   onComplete: () => void;
   onError: (error: string) => void;
   disabled?: boolean;
+  iconOnly?: boolean;
 }
 
 export default function DeleteButton({
@@ -18,43 +30,43 @@ export default function DeleteButton({
   fileId,
   onComplete,
   onError,
-  disabled
+  disabled,
+  iconOnly = false
 }: DeleteButtonProps) {
   const [deleting, setDeleting] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    
-    if (!confirm('Are you sure you want to delete this file?')) {
-      return;
-    }
-
+  const handleDelete = async () => {
     try {
       setDeleting(true);
       const supabase = createClient();
-      
-      // Remove from storage
+
+      // First try to delete from storage
       const { error: storageError } = await supabase.storage
-        .from('files') // Replace with your bucket name
+        .from('files')
         .remove([filePath]);
-      
+
       if (storageError) {
-        throw new Error(storageError.message);
+        console.error('Storage deletion error:', storageError);
+        // Don't throw here, continue with DB deletion
       }
 
-      // Delete the database record if needed
+      // Then delete from database
       const { error: dbError } = await supabase
-        .from('files') // Replace with your table name
+        .from('files')
         .delete()
-        .match({ id: fileId });
+        .eq('id', fileId)
+        .single();
 
       if (dbError) {
+        console.error('Database deletion error:', dbError);
         throw new Error(dbError.message);
       }
 
+      setOpen(false);
       onComplete();
     } catch (error) {
-      console.error("Deletion error:", error);
+      console.error("Delete operation failed:", error);
       onError(error instanceof Error ? error.message : "Failed to delete file");
     } finally {
       setDeleting(false);
@@ -62,20 +74,59 @@ export default function DeleteButton({
   };
 
   return (
-    <Button
-      onClick={handleDelete}
-      disabled={disabled || deleting}
-      variant="destructive"
-      size="sm"
-      className="ml-2"
-      type="button"
-    >
-      {deleting ? (
-        <Loader2 size={16} className="animate-spin mr-2" />
-      ) : (
-        <Trash2 size={16} className="mr-2" />
-      )}
-      {deleting ? "Deleting..." : "Delete"}
-    </Button>
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          disabled={disabled || deleting}
+          variant={iconOnly ? "ghost" : "destructive"}
+          size={iconOnly ? "icon" : "sm"}
+          className={!iconOnly ? "ml-2" : ""}
+          type="button"
+        >
+          {deleting ? (
+            <Loader2 
+              size={16} 
+              className={`${iconOnly ? "" : "mr-2"} animate-spin`}
+            />
+          ) : (
+            <Trash2 
+              size={16} 
+              className={iconOnly ? "" : "mr-2"}
+            />
+          )}
+          {!iconOnly && (deleting ? "Deleting..." : "Delete")}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete File</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete this file? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel 
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+            }}
+          >
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

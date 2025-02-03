@@ -1,12 +1,16 @@
-import { createClient } from "@/utils/supabase/server";
-import { redirect } from "next/navigation";
+'use client';
 import { Suspense } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { redirect } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
-import FileGrid from "@/components/upload/file-grid";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import UploadModal from "@/components/upload/upload-modal";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { type FileData } from "@/hooks/useFileManager";
+import { FileDialog } from "@/components/files/FileDialog";
+import { FileGrid } from "@/components/files/file-grid";
+import { FileStats } from "@/components/files/file-stats";
 import SearchForm from "@/components/files/SearchBar";
+import UploadModal from "@/components/upload/upload-modal";
+import { Button } from "@/components/ui/button";
 
 function LoadingFiles() {
   return (
@@ -14,33 +18,29 @@ function LoadingFiles() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="p-4 bg-accent/10 animate-pulse rounded-lg h-16"
+          className="p-4 bg-accent/30 animate-pulse rounded-lg h-[72px]"
         />
       ))}
     </div>
   );
 }
 
-async function FilesWrapper({ searchQuery }: { searchQuery: string }) {
+async function FilesWrapper({ searchQuery }: { searchQuery?: string }) {
   noStore();
-  
-  try {
-    const supabase = await createClient();
-    const { data: files, error } = await supabase
-      .from("files")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .ilike('original_name', searchQuery ? `%${searchQuery}%` : '%')
-      .limit(20);
+  const supabase = await createClient();
 
-    if (error) throw error;
+  const query = supabase
+    .from("files")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-    return (
-      <div className="space-y-6">
-        <FileGrid files={files} />
-      </div>
-    );
-  } catch (error) {
+  if (searchQuery) {
+    query.ilike("original_name", `%${searchQuery}%`);
+  }
+
+  const { data: files, error } = await query;
+
+  if (error) {
     console.error("Error fetching files:", error);
     return (
       <div className="p-4 text-red-500 bg-red-50 rounded-lg">
@@ -48,51 +48,62 @@ async function FilesWrapper({ searchQuery }: { searchQuery: string }) {
       </div>
     );
   }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col space-y-6">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+          <div className="flex-1 w-full sm:w-auto max-w-md">
+            <SearchForm />
+          </div>
+          <div className="flex gap-2">
+            <UploadModal>
+              <Button>
+                Upload Files
+              </Button>
+            </UploadModal>
+            <FileDialog 
+              mode="upload"
+              open={false}
+              onOpenChange={() => {}}
+            />
+          </div>
+        </div>
+        <FileGrid files={files || []} />
+      </div>
+    </div>
+  );
 }
 
-export default async function ViewPage({
+export default async function FilePage({
   searchParams,
 }: {
   searchParams: { search?: string };
 }) {
-  try {
-    const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-    if (error) throw error;
-    if (!user) return redirect("/sign-in");
-
-    const searchQuery = searchParams.search || "";
-
-    return (
-      <div className="flex-1 w-full flex flex-col p-4 md:p-8 max-w-5xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="font-bold text-3xl">Your Files</h1>
-          <UploadModal>
-            <div className="p-5">
-            <Button size="default">
-              <Plus className="mr-2 h-4 w-4" />
-              Upload Files
-            </Button>
-            </div>
-          </UploadModal>
-        </div>
-        
-        <SearchForm defaultValue={searchQuery} />
-
-        <div className="mt-6">
-          <Suspense fallback={<LoadingFiles />}>
-            <FilesWrapper searchQuery={searchQuery} />
-          </Suspense>
-        </div>
-      </div>
-    );
-  } catch (error) {
-    console.error("Error loading user:", error);
-    return (
-      <div className="p-4 text-red-500 bg-red-50 rounded-lg">
-        Error loading user data. Please try again later.
-      </div>
-    );
+  if (error || !user) {
+    return redirect("/sign-in");
   }
+
+  const searchQuery = searchParams.search;
+
+  return (
+    <div className="flex-1 w-full flex flex-col p-6 md:p-8">
+      <div className="mb-8">
+        <h1 className="font-bold text-3xl mb-1">File Manager</h1>
+        <p className="text-muted-foreground">
+          Upload, manage and convert your files
+        </p>
+      </div>
+
+      <Suspense fallback={<LoadingFiles />}>
+        <FilesWrapper searchQuery={searchQuery} />
+      </Suspense>
+    </div>
+  );
 }

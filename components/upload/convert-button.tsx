@@ -1,4 +1,3 @@
-// components/upload/convert-button.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ interface ConvertButtonProps {
   onComplete: () => void;
   onError: (error: string) => void;
   disabled?: boolean;
+  iconOnly?: boolean;
 }
 
 export function ConvertButton({
@@ -21,11 +21,14 @@ export function ConvertButton({
   onComplete,
   onError,
   disabled,
+  iconOnly = false,
 }: ConvertButtonProps) {
   const [converting, setConverting] = useState(false);
 
   const handleConvert = async (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
     try {
       setConverting(true);
       onProgress(33);
@@ -56,17 +59,24 @@ export function ConvertButton({
     <Button
       onClick={handleConvert}
       disabled={disabled || converting}
-      variant="secondary"
-      size="sm"
-      className="ml-2"
+      variant={iconOnly ? "ghost" : "secondary"}
+      size={iconOnly ? "icon" : "sm"}
+      className={!iconOnly ? "ml-2" : ""}
       type="button"
+      title={iconOnly ? "Convert to Audio" : undefined}
     >
       {converting ? (
-        <Loader2 size={16} className="animate-spin mr-2" />
+        <Loader2 
+          size={16} 
+          className={`${iconOnly ? "" : "mr-2"} animate-spin`}
+        />
       ) : (
-        <Headphones size={16} className="mr-2" />
+        <Headphones 
+          size={16} 
+          className={iconOnly ? "" : "mr-2"}
+        />
       )}
-      {converting ? "Converting..." : "Convert to Audio"}
+      {!iconOnly && (converting ? "Converting..." : "Convert to Audio")}
     </Button>
   );
 }

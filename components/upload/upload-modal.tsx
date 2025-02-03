@@ -2,8 +2,8 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useState } from "react";
-import { FileUploadForm } from "./FileUploadForm";
 import { useRouter } from "next/navigation";
+import { FileUploadForm } from "../files/FileUploadForm";
 
 export default function UploadModal({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);

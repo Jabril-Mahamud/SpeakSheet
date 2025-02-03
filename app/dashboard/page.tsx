@@ -2,9 +2,9 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { unstable_noStore as noStore } from "next/cache";
-import FileGrid from "../../components/upload/file-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import FileStats from "@/components/upload/file-stats";
+import { FileGrid } from "@/components/files/file-grid";
+import { FileStats } from "@/components/files/file-stats";
 
 function LoadingFiles() {
   return (
