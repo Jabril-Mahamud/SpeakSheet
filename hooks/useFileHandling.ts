@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
-import { FileData } from '@/utils/file';
+import { FileData } from './useFileManager';
 
 export function useFileHandling() {
   const [loading, setLoading] = useState<string | null>(null);
