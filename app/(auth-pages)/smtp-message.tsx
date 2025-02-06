@@ -7,7 +7,7 @@ export function SmtpMessage() {
       <InfoIcon size={16} className="mt-0.5" />
       <div className="flex flex-col gap-1">
         <small className="text-sm text-secondary-foreground">
-          <strong> Note:</strong> I use resend for the emailing system ☺️
+          <strong> Note:</strong> Sometimes our emails get stuck in the spam folder ☹️
         </small>
         <div>
           <Link
