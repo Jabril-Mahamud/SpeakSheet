@@ -1,8 +1,9 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Headphones, Loader2 } from "lucide-react";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
+import { createClient } from "@/utils/supabase/client";
 
 interface ConvertButtonProps {
   text: string;
@@ -14,17 +15,27 @@ interface ConvertButtonProps {
   iconOnly?: boolean;
 }
 
-export function ConvertButton({
-  text,
-  fileName,
-  onProgress,
-  onComplete,
-  onError,
-  disabled,
-  iconOnly = false,
-}: ConvertButtonProps) {
+export function ConvertButton(props: ConvertButtonProps) {
   const [converting, setConverting] = useState(false);
+  const [voiceId, setVoiceId] = useState<string | null>(null);
   const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function fetchVoice() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+  
+      const { data } = await supabase
+        .from('user_tts_settings')
+        .select('aws_polly_voice')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      setVoiceId(data?.aws_polly_voice || 'Joanna');
+    }
+    fetchVoice();
+  }, [supabase]);
 
   const handleConvert = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -32,34 +43,36 @@ export function ConvertButton({
     
     try {
       setConverting(true);
-      onProgress(33);
+      props.onProgress(33);
 
       const response = await fetch("/api/convert-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voiceId: "Matthew" }),
+        body: JSON.stringify({ 
+          text: props.text, 
+          voiceId 
+        }),
       });
 
       if (!response.ok) throw new Error(await response.text());
 
-      onProgress(66);
+      props.onProgress(66);
       const data = await response.json();
       if (data.error) throw new Error(data.error);
 
-      onProgress(100);
+      props.onProgress(100);
       
-      // Refresh the page and show success toast
       router.refresh();
       toast({
         title: "Success",
         description: "Audio file created successfully. You can now find it in your files.",
       });
       
-      onComplete();
+      props.onComplete();
     } catch (error) {
       console.error("Conversion error:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to convert to audio";
-      onError(errorMessage);
+      props.onError(errorMessage);
       toast({
         title: "Error",
         description: errorMessage,
@@ -73,25 +86,25 @@ export function ConvertButton({
   return (
     <Button
       onClick={handleConvert}
-      disabled={disabled || converting}
-      variant={iconOnly ? "ghost" : "secondary"}
-      size={iconOnly ? "icon" : "sm"}
-      className={!iconOnly ? "ml-2" : ""}
+      disabled={props.disabled || converting}
+      variant={props.iconOnly ? "ghost" : "secondary"}
+      size={props.iconOnly ? "icon" : "sm"}
+      className={!props.iconOnly ? "ml-2" : ""}
       type="button"
-      title={iconOnly ? "Convert to Audio" : undefined}
+      title={props.iconOnly ? "Convert to Audio" : undefined}
     >
       {converting ? (
         <Loader2 
           size={16} 
-          className={`${iconOnly ? "" : "mr-2"} animate-spin`}
+          className={`${props.iconOnly ? "" : "mr-2"} animate-spin`}
         />
       ) : (
         <Headphones 
           size={16} 
-          className={iconOnly ? "" : "mr-2"}
+          className={props.iconOnly ? "" : "mr-2"}
         />
       )}
-      {!iconOnly && (converting ? "Converting..." : "Convert to Audio")}
+      {!props.iconOnly && (converting ? "Converting..." : "Convert to Audio")}
     </Button>
   );
 }

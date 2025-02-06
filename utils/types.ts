@@ -59,3 +59,14 @@ export interface FileDialogProps {
   onOpenChange?: (open: boolean) => void;
   content?: string;
 }
+
+export interface ConvertButtonProps {
+  text: string;
+  fileName: string;
+  voiceId?: string;
+  onProgress: (progress: number) => void;
+  onComplete: () => void;
+  onError: (error: string) => void;
+  disabled?: boolean;
+  iconOnly?: boolean;
+}
