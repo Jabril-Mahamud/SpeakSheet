@@ -1,8 +1,8 @@
-"use client";
-
 import { Button } from "@/components/ui/button";
 import { Headphones, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "@/hooks/use-toast";
 
 interface ConvertButtonProps {
   text: string;
@@ -24,6 +24,7 @@ export function ConvertButton({
   iconOnly = false,
 }: ConvertButtonProps) {
   const [converting, setConverting] = useState(false);
+  const router = useRouter();
 
   const handleConvert = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -46,10 +47,24 @@ export function ConvertButton({
       if (data.error) throw new Error(data.error);
 
       onProgress(100);
+      
+      // Refresh the page and show success toast
+      router.refresh();
+      toast({
+        title: "Success",
+        description: "Audio file created successfully. You can now find it in your files.",
+      });
+      
       onComplete();
     } catch (error) {
       console.error("Conversion error:", error);
-      onError(error instanceof Error ? error.message : "Failed to convert to audio");
+      const errorMessage = error instanceof Error ? error.message : "Failed to convert to audio";
+      onError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setConverting(false);
     }

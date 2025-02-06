@@ -58,7 +58,7 @@ async function FilesWrapper({ searchQuery }: { searchQuery?: string }) {
           </div>
           <div className="flex gap-2">
             <UploadModal>
-              <Button>
+              <Button size={'lg'} >
                 Upload Files
               </Button>
             </UploadModal>

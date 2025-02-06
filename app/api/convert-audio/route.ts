@@ -1,4 +1,3 @@
-// app/api/convert-audio/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { 
@@ -111,8 +110,9 @@ export async function POST(request: NextRequest) {
 
     const finalAudioBuffer = Buffer.concat(audioChunks)
     const timestamp = Date.now()
-    const originalName = `audio_${timestamp}.mp3`
-    const fileName = `${user.id}/audio/${timestamp}.mp3`
+    const fileId = crypto.randomUUID()
+    const originalName = `audio_${timestamp}_${fileId.slice(0, 8)}.mp3`
+    const fileName = `${user.id}/audio/${fileId}/${timestamp}.mp3`
 
     const { error: uploadError } = await supabase.storage
       .from('files')
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     const { data: fileRecord, error: dbError } = await supabase
       .from("files")
       .insert({
-        id: crypto.randomUUID(),
+        id: fileId,
         user_id: user.id,
         file_path: fileName,
         file_type: 'audio/mpeg',
