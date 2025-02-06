@@ -1,24 +1,24 @@
-export type Message =
-  | { success: string }
-  | { error: string }
-  | { message: string };
+import React from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
+
+export type Message = {
+  message?: string;
+  error?: string;
+  success?: string;
+};
 
 export function FormMessage({ message }: { message: Message }) {
+  if (!message.error && !message.message && !message.success) return null;
+
+  const content = message.error || message.message || message.success;
+  const isError = !!message.error;
+  const isSuccess = !!message.success;
+
   return (
-    <div className="flex flex-col gap-2 w-full max-w-md text-sm">
-      {"success" in message && (
-        <div className="text-foreground border-l-2 border-foreground px-4">
-          {message.success}
-        </div>
-      )}
-      {"error" in message && (
-        <div className="text-destructive-foreground border-l-2 border-destructive-foreground px-4">
-          {message.error}
-        </div>
-      )}
-      {"message" in message && (
-        <div className="text-foreground border-l-2 px-4">{message.message}</div>
-      )}
-    </div>
+    <Alert variant={isError ? "destructive" : isSuccess ? "default" : "default"} className="mt-4">
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription>{content}</AlertDescription>
+    </Alert>
   );
 }
