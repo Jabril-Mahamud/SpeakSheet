@@ -16,7 +16,10 @@ export function FormMessage({ message }: { message: Message }) {
   const isSuccess = !!message.success;
 
   return (
-    <Alert variant={isError ? "destructive" : isSuccess ? "default" : "default"} className="mt-4">
+    <Alert 
+      variant={isError ? "destructive" : "default"} 
+      className={`mt-4 ${isSuccess ? "border-green-500 bg-green-500/10 text-green-500" : ""}`}
+    >
       <AlertCircle className="h-4 w-4" />
       <AlertDescription>{content}</AlertDescription>
     </Alert>
