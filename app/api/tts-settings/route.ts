@@ -1,61 +1,81 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { TtsSettings } from "@/utils/types"; 
+
+interface TtsSettings {
+  id: string;
+  tts_service: string;
+  api_key?: string;
+  aws_polly_voice?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json({ message: "User not authenticated" }, { status: 401 });
+    }
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return new Response(JSON.stringify({ message: "User not authenticated" }), { status: 401 });
+    const { data, error } = await supabase
+      .from('user_tts_settings')
+      .select<'*', TtsSettings>('*')
+      .eq('id', user.id)
+      .single();
+    
+    if (error) throw error;
+    
+    return NextResponse.json(data);
+  } catch (error) {
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Internal server error" }, 
+      { status: 500 }
+    );
   }
-
-  const { data, error } = await supabase
-    .from('user_tts_settings')
-    .select<'*', TtsSettings>('*')
-    .eq('id', user.id)
-    .single();
-
-  if (error) {
-    return new Response(JSON.stringify({ message: error.message }), { status: 500 });
-  }
-
-  return new Response(JSON.stringify(data), { status: 200 });
 }
 
 export async function POST(req: NextRequest) {
-  const { tts_service, api_key } = await req.json();
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json({ message: "User not authenticated" }, { status: 401 });
+    }
 
-  if (!tts_service || !api_key) {
+    const body = await req.json();
+    const { tts_service, api_key, aws_polly_voice } = body;
+
+    if (!tts_service) {
+      return NextResponse.json(
+        { message: "TTS service is required" },
+        { status: 400 }
+      );
+    }
+
+    const ttsSettings: Partial<TtsSettings> = {
+      id: user.id,
+      tts_service,
+      api_key: api_key || null,
+      aws_polly_voice: aws_polly_voice || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('user_tts_settings')
+      .upsert(ttsSettings)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(data);
+  } catch (error) {
     return NextResponse.json(
-      { message: "TTS service and API key are required" },
-      { status: 400 }
+      { message: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
     );
   }
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ message: "User not authenticated" }, { status: 401 });
-  }
-
-  const userId = user.id;
-
-  const ttsSettings: TtsSettings = {
-    id: userId,
-    tts_service,
-    api_key,
-  };
-
-  const { data, error } = await supabase
-    .from('user_tts_settings')
-    .upsert<TtsSettings>(ttsSettings, { onConflict: "id" });
-
-  if (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ data }, { status: 200 });
 }
