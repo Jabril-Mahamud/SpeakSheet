@@ -11,6 +11,7 @@ import { FileStats } from "@/components/files/file-stats";
 import SearchForm from "@/components/files/SearchBar";
 import UploadModal from "@/components/upload/upload-modal";
 import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 function LoadingFiles() {
   return (
@@ -58,8 +59,8 @@ async function FilesWrapper({ searchQuery }: { searchQuery?: string }) {
           </div>
           <div className="flex gap-2">
             <UploadModal>
-              <Button size={'lg'} >
-                Upload Files
+              <Button size={'lg'} className="font-bold">
+                <Plus />   Upload Files
               </Button>
             </UploadModal>
             <FileDialog 

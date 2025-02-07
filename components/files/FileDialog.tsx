@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Download, Loader2 } from "lucide-react";
+import { Play, Pause, RotateCcw, Download, Loader2, Volume2, VolumeX } from "lucide-react";
 import { FileUploadForm } from "./FileUploadForm";
 import { createClient } from "@/utils/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,6 +31,8 @@ export function FileDialog({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const supabase = createClient();
   const router = useRouter();
@@ -105,6 +107,23 @@ export function FileDialog({
     }
   };
 
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+      setIsMuted(newVolume === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    if (audioRef.current) {
+      const newMutedState = !isMuted;
+      setIsMuted(newMutedState);
+      audioRef.current.volume = newMutedState ? 0 : volume;
+    }
+  };
+
   const resetAudio = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
@@ -131,9 +150,7 @@ export function FileDialog({
               <ConvertButton
                 text={content}
                 fileName={file.original_name}
-                onProgress={() => {
-                  // Handle progress if needed
-                }}
+                onProgress={() => {}}
                 onComplete={() => {
                   router.refresh();
                   onOpenChange?.(false);
@@ -229,6 +246,30 @@ export function FileDialog({
                   <span>{formatTime(currentTime)}</span>
                   <span>{formatTime(duration)}</span>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-4 w-full max-w-xl mx-auto">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-foreground"
+                  onClick={toggleMute}
+                  disabled={!audioUrl}
+                >
+                  {isMuted ? (
+                    <VolumeX className="h-4 w-4" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </Button>
+                <Slider
+                  value={[isMuted ? 0 : volume]}
+                  max={1}
+                  step={0.01}
+                  onValueChange={handleVolumeChange}
+                  disabled={!audioUrl}
+                  className="flex-1 cursor-pointer"
+                />
               </div>
             </div>
           ) : file?.file_type === "text/plain" ? (
