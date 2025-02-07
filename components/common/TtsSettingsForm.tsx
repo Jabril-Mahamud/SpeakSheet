@@ -8,15 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 import { Loader2 } from "lucide-react";
-
-interface TtsSettings {
-  id: string;
-  tts_service: string;
-  api_key?: string;
-  aws_polly_voice?: string;
-  created_at: string;
-  updated_at: string;
-}
+import { TtsSettings } from "@/utils/types";
 
 const DEBOUNCE_TIME = 1000;
 

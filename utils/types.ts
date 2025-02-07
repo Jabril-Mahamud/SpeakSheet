@@ -8,11 +8,15 @@ export type UploadFormProps = {
   uploading: boolean;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 };
-export type TtsSettings = {
+export interface TtsSettings {
   id: string;
   tts_service: string;
-  api_key: string;
-};
+  api_key?: string;
+  aws_polly_voice?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FileRecord {
   id: string;
   file_path: string;
@@ -28,7 +32,7 @@ export interface UploadProgress {
 export interface FileProgressItemProps {
   file: File;
   progress?: UploadProgress;
-  showButtons: boolean;  // Changed to explicitly require boolean
+  showButtons: boolean; 
   isText: boolean;
   convertedText?: string;
   onUpdateProgress: (fileName: string, progress: number) => void;
