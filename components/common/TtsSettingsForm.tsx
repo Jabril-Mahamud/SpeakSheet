@@ -12,6 +12,15 @@ import { TtsSettings } from "@/utils/types";
 
 const DEBOUNCE_TIME = 1000;
 
+interface PollyVoice {
+  id: string;
+  name: string;
+  gender: string;
+  languageCode: string;
+  languageName: string;
+  engine: string[];
+}
+
 export default function TtsSettingsForm() {
   const [ttsSettings, setTtsSettings] = useState<TtsSettings | null>(null);
   const [formData, setFormData] = useState({
@@ -22,6 +31,8 @@ export default function TtsSettingsForm() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [voices, setVoices] = useState<Record<string, PollyVoice[]>>({});
+  const [loadingVoices, setLoadingVoices] = useState(false);
   const { toast } = useToast();
   const supabase = createClient();
 
@@ -29,6 +40,12 @@ export default function TtsSettingsForm() {
     const timer = setTimeout(fetchSettings, DEBOUNCE_TIME);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (formData.tts_service === 'Amazon') {
+      fetchVoices();
+    }
+  }, [formData.tts_service]);
 
   useEffect(() => {
     if (ttsSettings) {
@@ -39,6 +56,25 @@ export default function TtsSettingsForm() {
       });
     }
   }, [ttsSettings]);
+
+  async function fetchVoices() {
+    setLoadingVoices(true);
+    try {
+      const response = await fetch('/api/voices');
+      if (!response.ok) throw new Error('Failed to fetch voices');
+      const data = await response.json();
+      setVoices(data);
+    } catch (error) {
+      console.error('Error fetching voices:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load AWS Polly voices"
+      });
+    } finally {
+      setLoadingVoices(false);
+    }
+  }
 
   async function fetchSettings() {
     try {
@@ -146,7 +182,7 @@ export default function TtsSettingsForm() {
           disabled={isProcessing}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select a service (Not implemented yet!)" />
+            <SelectValue placeholder="Select a service" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ElevenLabs">ElevenLabs</SelectItem>
@@ -167,17 +203,40 @@ export default function TtsSettingsForm() {
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="aws_polly_voice">AWS Polly Voice</Label>
-        <Input
-          type="text"
-          id="aws_polly_voice"
-          value={formData.aws_polly_voice}
-          onChange={(e) => setFormData(prev => ({ ...prev, aws_polly_voice: e.target.value }))}
-          placeholder="e.g. Joanna, Matthew"
-          disabled={isProcessing}
-        />
-      </div>
+      {formData.tts_service === 'Amazon' && (
+        <div className="space-y-2">
+          <Label htmlFor="aws_polly_voice">AWS Polly Voice</Label>
+          <Select 
+            value={formData.aws_polly_voice}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, aws_polly_voice: value }))}
+            disabled={isProcessing || loadingVoices}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={loadingVoices ? "Loading voices..." : "Select a voice"} />
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              {loadingVoices ? (
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                Object.entries(voices).map(([language, languageVoices]) => (
+                  <div key={language}>
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
+                      {language}
+                    </div>
+                    {languageVoices.map((voice) => (
+                      <SelectItem key={voice.id} value={voice.id}>
+                        {voice.name} ({voice.gender})
+                      </SelectItem>
+                    ))}
+                  </div>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <Button 
         type="submit" 

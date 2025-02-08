@@ -5,6 +5,8 @@ import {
   SynthesizeSpeechCommand,
   VoiceId,
   SynthesizeSpeechCommandInput,
+  Engine,
+  DescribeVoicesCommand
 } from "@aws-sdk/client-polly";
 import { Readable } from "stream";
 
@@ -60,6 +62,17 @@ const chunkText = (text: string, maxLength: number = 2900): string[] => {
   return chunks;
 };
 
+async function getVoiceEngineSupport(voiceId: string): Promise<Engine[]> {
+  const command = new DescribeVoicesCommand({
+    IncludeAdditionalLanguageCodes: true,
+  });
+  
+  const response = await pollyClient.send(command);
+  const voice = response.Voices?.find(v => v.Id === voiceId);
+  
+  return voice?.SupportedEngines || ['standard'];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -75,7 +88,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .maybeSingle();
 
-    const { text, voiceId } = await request.json();
+    const { text, voiceId, originalFilename } = await request.json();
     const selectedVoice = voiceId || settings?.aws_polly_voice || 'Joanna';
    
     if (!text) {
@@ -88,17 +101,21 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log("Making AWS Polly request with voiceId:", selectedVoice);
+    // Get supported engines for the selected voice
+    const supportedEngines = await getVoiceEngineSupport(selectedVoice);
+    const engine = supportedEngines.includes('neural') ? 'neural' : 'standard';
+
+    console.log(`Making AWS Polly request with voiceId: ${selectedVoice}, engine: ${engine}`);
 
     const textChunks = chunkText(text);
     const audioChunks: Buffer[] = [];
 
     for (const chunk of textChunks) {
       const input: SynthesizeSpeechCommandInput = {
-        Engine: "neural",
+        Engine: engine,
         OutputFormat: "mp3",
         Text: chunk,
-        VoiceId: voiceId as VoiceId,
+        VoiceId: selectedVoice as VoiceId,
         TextType: "text",
       };
 
@@ -124,8 +141,13 @@ export async function POST(request: NextRequest) {
     const finalAudioBuffer = Buffer.concat(audioChunks);
     const timestamp = Date.now();
     const fileId = crypto.randomUUID();
-    const originalName = `audio_${timestamp}_${fileId.slice(0, 8)}.mp3`;
-    const fileName = `${user.id}/audio/${fileId}/${timestamp}.mp3`;
+    
+    // Generate the audio filename based on the original file
+    const audioFilename = originalFilename 
+      ? `${originalFilename.replace(/\.[^/.]+$/, '')}_audio.mp3` // Remove original extension and add _audio.mp3
+      : `audio_${timestamp}_${fileId.slice(0, 8)}.mp3`; // Fallback to timestamp-based name
+    
+    const fileName = `${user.id}/audio/${fileId}/${audioFilename}`;
 
     const { error: uploadError } = await supabase.storage
       .from("files")
@@ -146,7 +168,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         file_path: fileName,
         file_type: "audio/mpeg",
-        original_name: originalName,
+        original_name: audioFilename,
         created_at: new Date().toISOString(),
       })
       .select()

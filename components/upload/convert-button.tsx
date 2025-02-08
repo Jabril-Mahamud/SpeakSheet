@@ -45,12 +45,16 @@ export function ConvertButton(props: ConvertButtonProps) {
       setConverting(true);
       props.onProgress(33);
 
+      // Strip the extension and pass the original filename
+      const baseName = props.fileName.replace(/\.[^/.]+$/, '');
+
       const response = await fetch("/api/convert-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          text: props.text, 
-          voiceId 
+          text: props.text,
+          voiceId,
+          originalFilename: baseName
         }),
       });
 

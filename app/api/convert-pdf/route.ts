@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Get original filename without extension
+    const originalName = file.name.replace(/\.pdf$/i, '')
+
     const pdfcrowdForm = new FormData()
     pdfcrowdForm.append('input_format', 'pdf')
     pdfcrowdForm.append('output_format', 'txt')
@@ -55,14 +58,6 @@ export async function POST(request: NextRequest) {
       body: pdfcrowdForm
     })
 
-    // Log response details for debugging
-    console.log('PDFcrowd response:', {
-      status: response.status,
-      statusText: response.statusText,
-      contentType: response.headers.get('content-type'),
-      contentLength: response.headers.get('content-length')
-    })
-
     if (!response.ok) {
       const errorText = await response.text()
       console.error('PDFcrowd error response:', {
@@ -73,25 +68,16 @@ export async function POST(request: NextRequest) {
       throw new Error(`PDFcrowd API error: ${errorText}`)
     }
 
-    // Check content type
-    const contentType = response.headers.get('content-type')
-    if (!contentType?.includes('text/plain')) {
-      console.warn('Unexpected content type:', contentType)
-    }
-
     const textContent = await response.text()
-    
-    // Log content length for debugging
-    console.log('Converted text length:', textContent.length)
     
     if (!textContent || textContent.length === 0) {
       throw new Error('Empty conversion result')
     }
 
-    // Log first few characters of content for debugging
-    console.log('First 100 chars of converted text:', textContent.substring(0, 100))
-
-    return NextResponse.json({ text: textContent })
+    return NextResponse.json({ 
+      text: textContent,
+      originalName: `${originalName}.txt` // Send back the original name with .txt extension
+    })
   } catch (error) {
     console.error('[PDF Conversion Error]:', error)
     
