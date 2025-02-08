@@ -3,11 +3,8 @@ import { Suspense } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { redirect } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type FileData } from "@/hooks/useFileManager";
 import { FileDialog } from "@/components/files/FileDialog";
 import { FileGrid } from "@/components/files/file-grid";
-import { FileStats } from "@/components/files/file-stats";
 import SearchForm from "@/components/files/SearchBar";
 import UploadModal from "@/components/upload/upload-modal";
 import { Button } from "@/components/ui/button";
@@ -29,7 +26,6 @@ function LoadingFiles() {
 async function FilesWrapper({ searchQuery }: { searchQuery?: string }) {
   noStore();
   const supabase = await createClient();
-
   const query = supabase
     .from("files")
     .select("*")
@@ -53,17 +49,18 @@ async function FilesWrapper({ searchQuery }: { searchQuery?: string }) {
   return (
     <div className="space-y-8">
       <div className="flex flex-col space-y-6">
-        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-          <div className="flex-1 w-full sm:w-auto max-w-md">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 max-w-md">
             <SearchForm />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 md:justify-end">
             <UploadModal>
-              <Button size={'lg'} className="font-bold">
-                <Plus />   Upload Files
+              <Button size="lg" className="w-full md:w-auto gap-2 font-medium">
+                <Plus className="h-5 w-5" />
+                Upload Files
               </Button>
             </UploadModal>
-            <FileDialog 
+            <FileDialog
               mode="upload"
               open={false}
               onOpenChange={() => {}}
@@ -94,14 +91,13 @@ export default async function FilePage({
   const searchQuery = searchParams.search;
 
   return (
-    <div className="flex-1 w-full flex flex-col p-6 md:p-8">
-      <div className="mb-8">
-        <h1 className="font-bold text-3xl mb-1">File Manager</h1>
+    <div className="flex-1 w-full flex flex-col gap-8 p-6 md:p-8">
+      <div>
+        <h1 className="font-bold text-3xl mb-2">File Manager</h1>
         <p className="text-muted-foreground">
           Upload, manage and convert your files
         </p>
       </div>
-
       <Suspense fallback={<LoadingFiles />}>
         <FilesWrapper searchQuery={searchQuery} />
       </Suspense>
