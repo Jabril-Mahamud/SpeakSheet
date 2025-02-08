@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { captureServerEvent } from "@/utils/posthog-server";
 import {
   PollyClient,
   SynthesizeSpeechCommand,
@@ -74,11 +75,14 @@ async function getVoiceEngineSupport(voiceId: string): Promise<Engine[]> {
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-   
     if (!user) {
+      await captureServerEvent('tts_conversion_unauthorized', user, {
+        error: 'User not authenticated'
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -91,11 +95,25 @@ export async function POST(request: NextRequest) {
     const { text, voiceId, originalFilename } = await request.json();
     const selectedVoice = voiceId || settings?.aws_polly_voice || 'Joanna';
    
+    await captureServerEvent('tts_conversion_started', user, {
+      textLength: text?.length,
+      voiceId: selectedVoice,
+      hasOriginalFilename: !!originalFilename
+    });
+
     if (!text) {
+      await captureServerEvent('tts_conversion_error', user, {
+        error: 'Missing text',
+        voiceId: selectedVoice
+      });
       return NextResponse.json({ error: 'Missing text' }, { status: 400 })
     }
 
     if (!Object.values(VoiceId).includes(selectedVoice as VoiceId)) {
+      await captureServerEvent('tts_conversion_error', user, {
+        error: 'Invalid voice ID',
+        voiceId: selectedVoice
+      });
       return NextResponse.json({ 
         error: `Invalid voice ID. Please use a valid Amazon Polly voice ID.`
       }, { status: 400 })
@@ -157,6 +175,11 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
+      await captureServerEvent('tts_conversion_error', user, {
+        error: `Upload error: ${uploadError.message}`,
+        voiceId: selectedVoice,
+        stage: 'upload'
+      });
       console.error("Upload error:", uploadError);
       throw new Error(`Audio upload error: ${uploadError.message}`);
     }
@@ -175,8 +198,21 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (dbError) {
+      await captureServerEvent('tts_conversion_error', user, {
+        error: `Database error: ${dbError.message}`,
+        voiceId: selectedVoice,
+        stage: 'database'
+      });
       throw new Error(`Database error: ${dbError.message}`);
     }
+
+    await captureServerEvent('tts_conversion_completed', user, {
+      fileId: fileRecord.id,
+      textLength: text.length,
+      voiceId: selectedVoice,
+      chunks: textChunks.length,
+      engine: engine
+    });
 
     return NextResponse.json({
       success: true,
@@ -184,8 +220,15 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[Audio Conversion Error]:", error);
+    
+    const errorMessage = error instanceof Error ? error.message : "Conversion failed";
+    await captureServerEvent('tts_conversion_error', user, {
+      error: errorMessage,
+      stage: 'unknown'
+    });
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Conversion failed" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

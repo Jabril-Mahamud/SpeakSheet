@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import posthog from "posthog-js";
 
 export default async function ProtectedPage() {
   const supabase = await createClient();
@@ -13,6 +14,7 @@ export default async function ProtectedPage() {
   if (!user) {
     return redirect("/sign-in");
   }
+  posthog.capture('my event', { property: 'value' })
 
   return (
     <div className="container max-w-6xl mx-auto py-8 px-4">
