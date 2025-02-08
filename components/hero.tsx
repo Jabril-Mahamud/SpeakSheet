@@ -1,191 +1,215 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { motion, useAnimation } from "framer-motion"
+import { useState, useEffect, useCallback } from "react"
+import { motion } from "framer-motion"
 import { useTheme } from "next-themes"
-import { Book, FileText, Volume2 as VolumeUp, Sparkles } from "lucide-react"
+import { ArrowRight, Files, Volume2, BookOpen, Sparkles } from "lucide-react"
+import Particles from "react-tsparticles"
+import { loadSlim } from "tsparticles-slim"
+import type { Engine } from "tsparticles-engine"
 
-export default function FlashierHero() {
+const features = [
+  { 
+    name: "PDF to Audio", 
+    icon: Files, 
+    description: "Convert any PDF into natural speech" 
+  },
+  { 
+    name: "Multiple Voices", 
+    icon: Volume2, 
+    description: "Choose from various AI voices" 
+  },
+  { 
+    name: "Future Audiobooks", 
+    icon: BookOpen, 
+    description: "Your personal audiobook library" 
+  }
+]
+
+export default function Hero() {
   const { theme, systemTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const controls = useAnimation()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const currentTheme = theme === "system" ? systemTheme : theme
-  const isDark = currentTheme === "dark"
-
-  useEffect(() => {
-    controls.start({
-      backgroundColor: "transparent",
-      color: isDark ? "rgb(var(--foreground-rgb))" : "rgb(var(--foreground-rgb))",
-      transition: { duration: 0.5 },
-    })
-  }, [isDark, controls])
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-  }
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-    },
-  }
-
-  const colorChangeVariants = {
-    animate: {
-      color: [
-        "rgb(var(--primary-rgb))",
-        "rgb(var(--secondary-rgb))",
-        "rgb(var(--accent-rgb))",
-        "rgb(var(--primary-rgb))",
-        "rgb(var(--secondary-rgb))",
-        "rgb(var(--accent-rgb))",
-      ],
-      transition: {
-        duration: 5,
-        repeat: Number.POSITIVE_INFINITY,
-        ease: "linear",
-      },
-    },
-  }
-
-  const generateRandomColor = () => {
-    const letters = "0123456789ABCDEF"
-    let color = "#"
-    for (let i = 0; i < 6; i++) {
-      color += letters[Math.floor(Math.random() * 16)]
-    }
-    return color
-  }
-
-  // Sparkles icon color change to random colors
-  const sparklesVariants = {
-    animate: {
-      fill: Array.from({ length: 5 }, generateRandomColor),
-      transition: {
-        duration: 2,
-        repeat: Number.POSITIVE_INFINITY,
-        ease: "linear",
-      },
-    },
-  }
+  const particlesInit = useCallback(async (engine: Engine) => {
+    await loadSlim(engine)
+  }, [])
 
   if (!mounted) return null
 
+  const currentTheme = theme === "system" ? systemTheme : theme
+  const isDark = currentTheme === "dark"
+
   return (
-    <motion.section className="w-full max-w-5xl mx-auto px-5">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="relative z-10 text-center"
-      >
-        {/* Title Section */}
-        <motion.div variants={itemVariants}>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-4 text-indigo-600 dark:text-teal-400 hover:text-yellow-500 transition-colors duration-300">
-            Unleash the Power of
-            <br />
-            <motion.span
-              variants={colorChangeVariants}
-              animate="animate"
-              className="inline-flex items-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-teal-500 dark:from-blue-400 dark:to-green-400 hover:text-red-500 transition-all duration-300"
-            >
-              AI-Powered Voice{" "}
-              <motion.div
-                className="ml-2 h-8 w-8"
-                variants={sparklesVariants}
-                animate="animate"
-              >
-                <Sparkles />
-              </motion.div>
-            </motion.span>
-          </h1>
-          <p className="text-lg sm:text-xl md:text-2xl font-light mb-8 text-gray-800 dark:text-gray-300">
-            Transform your books and PDFs into captivating audio experiences
-          </p>
-        </motion.div>
+    <section className="relative overflow-hidden pb-[140px]">
+      {/* Particles Background */}
+      <Particles
+        className="absolute inset-0 -z-10"
+        id="tsparticles"
+        init={particlesInit}
+        options={{
+          particles: {
+            color: {
+              value: ["#6366f1", "#06b6d4", "#8b5cf6"]
+            },
+            number: { value: 50, density: { enable: true, value_area: 800 } },
+            shape: { type: "circle" },
+            opacity: { value: 0.2 },
+            size: { value: { min: 1, max: 3 } },
+            links: {
+              enable: true,
+              distance: 150,
+              color: isDark ? "#a78bfa" : "#6366f1",
+              opacity: 0.1,
+              width: 1
+            },
+            move: {
+              enable: true,
+              speed: 1,
+              direction: "none",
+              random: true,
+              straight: false,
+              outModes: { default: "bounce" }
+            }
+          },
+          interactivity: {
+            events: {
+              onHover: { enable: true, mode: "grab" },
+              onClick: { enable: true, mode: "push" }
+            },
+            modes: {
+              grab: { distance: 140, links: { opacity: 0.2 } },
+              push: { quantity: 4 }
+            }
+          }
+        }}
+      />
 
-        {/* Feature Icons */}
-        <motion.div variants={itemVariants} className="flex justify-center space-x-8 mb-8">
-          <FeatureIcon
-            Icon={Book}
-            text="Lifelike Narration"
-            buttonColor="bg-indigo-500 hover:bg-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-            iconColor={isDark ? "text-white" : "text-black"}
-          />
-          <FeatureIcon
-            Icon={FileText}
-            text="Instant Conversion"
-            buttonColor="bg-green-500 hover:bg-green-600 dark:bg-green-500 dark:hover:bg-green-600"
-            iconColor={isDark ? "text-white" : "text-black"}
-          />
-          <FeatureIcon
-            Icon={VolumeUp}
-            text="Immersive Audio"
-            buttonColor="bg-yellow-500 hover:bg-yellow-600 dark:bg-yellow-500 dark:hover:bg-yellow-600"
-            iconColor={isDark ? "text-white" : "text-black"}
-          />
-        </motion.div>
-
-        {/* CTA Button */}
-        <motion.div variants={itemVariants} className="flex justify-center">
-          <motion.a
-            href="#get-started"
-            className={`group relative inline-flex items-center justify-center px-6 py-3 text-base font-medium overflow-hidden rounded-md transition-all ${
-              isDark
-                ? "bg-white text-black hover:bg-gray-200"
-                : "bg-black text-white hover:bg-gray-800"
-            }`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+      <div className="container px-4 mx-auto">
+        {/* Hero Content */}
+        <div className="relative pt-20 pb-16 md:pt-32 md:pb-24">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-4xl mx-auto text-center"
           >
-            <motion.span className="relative z-10 transition duration-500">
-              Experience the Magic
-            </motion.span>
-          </motion.a>
-        </motion.div>
-      </motion.div>
-    </motion.section>
-  )
-}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mb-8 inline-flex items-center rounded-full border px-6 py-2 text-sm backdrop-blur-sm"
+            >
+              <motion.div
+                animate={{
+                  color: ["#FF6B6B", "#4ECDC4", "#45B7D1", "#FDCB6E", "#6C5CE7"],
+                  scale: [1, 1.2, 1]
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  repeatType: 'loop',
+                  ease: 'easeInOut'
+                }}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+              </motion.div>
+              Transform PDFs into Natural Speech
+            </motion.div>
 
-function FeatureIcon({
-  Icon,
-  text,
-  buttonColor,
-  iconColor,
-}: {
-  Icon: React.ElementType
-  text: string
-  buttonColor: string
-  iconColor: string
-}) {
-  return (
-    <motion.div
-      className="flex flex-col items-center"
-      whileHover={{ scale: 1.1, rotate: 15 }}
-      transition={{ duration: 0.3 }}
-    >
-      <motion.div
-        className={`${buttonColor} text-white rounded-full p-3 mb-2 shadow-lg`}
-        whileHover={{ scale: 1.2 }}
-        transition={{ duration: 0.3 }}
-      >
-        <Icon className={`h-6 w-6 ${iconColor}`} />
-      </motion.div>
-      <span className="text-sm font-medium text-gray-800 dark:text-gray-300">{text}</span>
-    </motion.div>
+            <motion.h1 
+              className="text-4xl font-bold tracking-tighter sm:text-6xl md:text-7xl mb-8"
+            >
+              <span className="text-foreground">Turn Your PDFs Into</span>
+              <br />
+              <motion.span
+                animate={{
+                  color: ["#4F46E5", "#06b6d4", "#7C3AED", "#4F46E5"],
+                }}
+                transition={{
+                  duration: 5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              >
+                Audio Experiences
+              </motion.span>
+            </motion.h1>
+
+            <p className="max-w-2xl mx-auto text-xl text-muted-foreground mb-12">
+              Convert PDFs to high-quality audio using multiple AI voice services. 
+              Your documents, brought to life with natural-sounding speech.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+              <motion.a
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                href="/dashboard"
+                className="group inline-flex h-12 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-violet-500 hover:from-indigo-600 hover:via-cyan-600 hover:to-violet-600 px-8 text-base font-medium text-white shadow-lg transition-all duration-300 hover:shadow-xl"
+              >
+                Convert Your First PDF
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </motion.a>
+              <motion.a
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                href="#demo"
+                className="inline-flex h-12 items-center justify-center rounded-full border px-8 text-base font-medium shadow-sm transition-colors hover:bg-muted"
+              >
+                Watch Demo
+              </motion.a>
+            </div>
+          </motion.div>
+
+          {/* Feature Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {features.map((feature, index) => {
+              const Icon = feature.icon
+              return (
+                <motion.div
+                  key={feature.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 + index * 0.1 }}
+                  className="group relative overflow-hidden rounded-2xl border bg-background/50 p-6 backdrop-blur-sm hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="rounded-full bg-primary/10 p-3">
+                      <Icon className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{feature.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {feature.description}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Wave */}
+      <div className="absolute bottom-0 left-0 right-0 h-[100px]">
+        <svg
+          className="absolute bottom-0 w-full h-full"
+          viewBox="0 0 1440 100"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 40C840 33 960 27 1080 33.3C1200 40 1320 60 1380 70L1440 80V100H1380C1320 100 1200 100 1080 100C960 100 840 100 720 100C600 100 480 100 360 100C240 100 120 100 60 100H0V0Z"
+            className="fill-background"
+          />
+        </svg>
+      </div>
+    </section>
   )
 }
