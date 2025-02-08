@@ -97,7 +97,7 @@ export default async function ProtectedPage() {
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">
                         Amazon Polly is provided as our default service with high-quality voices. 
-                        For ElevenLabs or Google TTS, you'll need to provide your own API key.
+                        For ElevenLabs or Google TTS, you'll need to provide your own API key because of their rate limits.
                       </p>
                     </div>
                   </div>
