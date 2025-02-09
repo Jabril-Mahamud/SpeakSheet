@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { captureServerEvent } from "@/utils/posthog-server";
+import { PollyUsageTracker } from '@/utils/polly-usage-tracker';
 import {
   PollyClient,
   SynthesizeSpeechCommand,
@@ -94,6 +95,21 @@ export async function POST(request: NextRequest) {
 
     const { text, voiceId, originalFilename } = await request.json();
     const selectedVoice = voiceId || settings?.aws_polly_voice || 'Joanna';
+
+    // Add usage limit check
+    const usageCheck = await PollyUsageTracker.checkUsageLimits(user.id, text.length);
+    if (!usageCheck.withinLimits) {
+      await captureServerEvent('tts_conversion_error', user, {
+        error: 'Character limit exceeded',
+        dailyUsage: usageCheck.dailyUsage,
+        monthlyUsage: usageCheck.monthlyUsage,
+        yearlyUsage: usageCheck.yearlyUsage
+      });
+      return NextResponse.json({ 
+        error: 'Monthly/Daily/Yearly character limit exceeded',
+        usageStats: usageCheck
+      }, { status: 429 }); // Too Many Requests
+    }
    
     await captureServerEvent('tts_conversion_started', user, {
       textLength: text?.length,
@@ -205,6 +221,13 @@ export async function POST(request: NextRequest) {
       });
       throw new Error(`Database error: ${dbError.message}`);
     }
+
+    // Record usage after successful synthesis
+    await PollyUsageTracker.recordUsage(
+      user.id, 
+      text.length, 
+      selectedVoice
+    );
 
     await captureServerEvent('tts_conversion_completed', user, {
       fileId: fileRecord.id,
