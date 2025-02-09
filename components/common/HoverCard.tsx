@@ -27,7 +27,7 @@ const NameHoverCard = () => {
               backgroundSize: "300% 300%",
             }}
           >
-            BrainStorm
+            AlexandrAI
           </motion.span>
         </Link>
       </HoverCardTrigger>
