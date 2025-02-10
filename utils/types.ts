@@ -74,3 +74,22 @@ export interface ConvertButtonProps {
   disabled?: boolean;
   iconOnly?: boolean;
 }
+
+export interface TTSSettings {
+  default_service: string;
+  aws_polly_voice?: string;
+  elevenlabs_voice_id?: string;
+  elevenlabs_stability?: number;
+  elevenlabs_similarity_boost?: number;
+  api_key?: string;
+}
+
+export interface ConvertButtonProps {
+  text: string;
+  fileName: string;
+  onProgress: (progress: number) => void;
+  onComplete: () => void;
+  onError: (error: string) => void;
+  disabled?: boolean;
+  iconOnly?: boolean;
+}
