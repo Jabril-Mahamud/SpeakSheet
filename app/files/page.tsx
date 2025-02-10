@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
 import { FileDialog } from "@/components/files/FileDialog";
 import { FileGrid } from "@/components/files/file-grid";
+import { FileStats } from "@/components/files/file-stats";
 import SearchForm from "@/components/files/SearchBar";
 import UploadModal from "@/components/upload/upload-modal";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus } from "lucide-react";
 
 function LoadingFiles() {
@@ -48,6 +50,15 @@ async function FilesWrapper({ searchQuery }: { searchQuery?: string }) {
 
   return (
     <div className="space-y-8">
+      <Card className="p-4">
+        <CardHeader>
+          <CardTitle>File Statistics</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FileStats files={files || []} />
+        </CardContent>
+      </Card>
+
       <div className="flex flex-col space-y-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 max-w-md">

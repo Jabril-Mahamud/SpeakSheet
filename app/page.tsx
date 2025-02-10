@@ -110,7 +110,7 @@ export default function Home() {
 
             <div className="flex justify-center mt-12">
               <Link
-                href="/dashboard"
+                href="/files"
                 className="group inline-flex items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-violet-500 hover:from-indigo-600 hover:via-cyan-600 hover:to-violet-600 px-8 py-3 text-base font-medium text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 Start Converting Now

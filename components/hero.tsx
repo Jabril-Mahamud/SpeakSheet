@@ -147,7 +147,7 @@ export default function Hero() {
               <motion.a
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                href="/dashboard"
+                href="/files"
                 className="group inline-flex h-12 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-violet-500 hover:from-indigo-600 hover:via-cyan-600 hover:to-violet-600 px-8 text-base font-medium text-white shadow-lg transition-all duration-300 hover:shadow-xl"
               >
                 Convert Your First PDF
