@@ -1,23 +1,31 @@
-import { createClient } from '@/utils/supabase/server';
+import { createClient } from "@/utils/supabase/server";
+import { captureServerEvent } from "@/utils/posthog-server";
 
+interface UserProfile {
+  username: string | null;
+  full_name: string | null;
+}
+
+interface UserWithProfile {
+  id: string;
+  email: string | null;
+  profiles: UserProfile | null;
+}
 export interface UserUsageStats {
   userId: string;
   email: string | null;
-  daily: {
-    totalCharacters: number;
-    limit: number;
-    voiceDistribution: Record<string, number>;
-  };
-  monthly: {
-    totalCharacters: number;
-    limit: number;
-    voiceDistribution: Record<string, number>;
-  };
-  yearly: {
-    totalCharacters: number;
-    limit: number;
-    voiceDistribution: Record<string, number>;
-  };
+  username: string;
+  daily: UsagePeriodStats;
+  monthly: UsagePeriodStats;
+  yearly: UsagePeriodStats;
+}
+
+export interface UsagePeriodStats {
+  totalCharacters: number;
+  limit: number;
+  voiceDistribution: Record<string, number>;
+  quotaRemaining: number;
+  resetTime: number;
 }
 
 export interface PollyUsageRecord {
@@ -26,87 +34,143 @@ export interface PollyUsageRecord {
   characters_synthesized: number;
   voice_id: string;
   synthesis_date: string;
+  content_hash?: string;
+}
+
+interface DatabaseUser {
+  id: string;
+  email: string | null;
+  profiles:
+    | {
+        username: string | null;
+        full_name: string | null;
+      }[]
+    | null; // Change to array since Supabase returns it as array
 }
 
 export class PollyUsageTracker {
-  // Configurable usage limits
+  // Configurable limits
   private static DAILY_CHARACTER_LIMIT = 100_000;
   private static MONTHLY_CHARACTER_LIMIT = 1_000_000;
   private static YEARLY_CHARACTER_LIMIT = 5_000_000;
 
+  // Cache settings
+  private static CACHE_DURATION = 60 * 1000; // 1 minute
+  private static usageCache = new Map<
+    string,
+    {
+      data: UserUsageStats;
+      timestamp: number;
+    }
+  >();
+
   /**
-   * Check if user is within Polly usage limits
+   * Check if user is within Polly usage limits with improved caching
    */
   static async checkUsageLimits(userId: string, characterCount: number) {
+    const cached = this.usageCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      const { daily, monthly, yearly } = cached.data;
+      return {
+        withinLimits:
+          daily.quotaRemaining >= characterCount &&
+          monthly.quotaRemaining >= characterCount &&
+          yearly.quotaRemaining >= characterCount,
+        dailyUsage: daily.totalCharacters,
+        monthlyUsage: monthly.totalCharacters,
+        yearlyUsage: yearly.totalCharacters,
+        dailyLimit: this.DAILY_CHARACTER_LIMIT,
+        monthlyLimit: this.MONTHLY_CHARACTER_LIMIT,
+        yearlyLimit: this.YEARLY_CHARACTER_LIMIT,
+      };
+    }
+
     const supabase = await createClient();
     const now = new Date();
 
     // Define date ranges
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const yearStart = new Date(now.getFullYear(), 0, 1);
 
     try {
-      // Fetch usage data
-      const { data: dailyData, error: dailyError } = await supabase
-        .from('polly_usage')
-        .select('characters_synthesized')
-        .eq('user_id', userId)
-        .gte('synthesis_date', todayStart.toISOString())
-        .lte('synthesis_date', now.toISOString());
+      // Parallel fetch for better performance
+      const [dailyData, monthlyData, yearlyData] = await Promise.all([
+        this.fetchUsageForPeriod(supabase, userId, todayStart, now),
+        this.fetchUsageForPeriod(supabase, userId, monthStart, now),
+        this.fetchUsageForPeriod(supabase, userId, yearStart, now),
+      ]);
 
-      const { data: monthlyData, error: monthlyError } = await supabase
-        .from('polly_usage')
-        .select('characters_synthesized')
-        .eq('user_id', userId)
-        .gte('synthesis_date', monthStart.toISOString())
-        .lte('synthesis_date', now.toISOString());
-
-      const { data: yearlyData, error: yearlyError } = await supabase
-        .from('polly_usage')
-        .select('characters_synthesized')
-        .eq('user_id', userId)
-        .gte('synthesis_date', yearStart.toISOString())
-        .lte('synthesis_date', now.toISOString());
-
-      // Validate data retrieval
-      if (dailyError || monthlyError || yearlyError) {
-        throw new Error('Failed to retrieve usage data');
-      }
-
-      // Calculate total usage
-      const dailyUsage = dailyData.reduce((sum, record) => sum + record.characters_synthesized, 0);
-      const monthlyUsage = monthlyData.reduce((sum, record) => sum + record.characters_synthesized, 0);
-      const yearlyUsage = yearlyData.reduce((sum, record) => sum + record.characters_synthesized, 0);
-
-      // Check if within limits
-      const withinLimits = 
-        dailyUsage + characterCount <= this.DAILY_CHARACTER_LIMIT &&
-        monthlyUsage + characterCount <= this.MONTHLY_CHARACTER_LIMIT &&
-        yearlyUsage + characterCount <= this.YEARLY_CHARACTER_LIMIT;
-
-      return {
-        withinLimits,
-        dailyUsage,
-        monthlyUsage,
-        yearlyUsage,
+      const result = {
+        withinLimits:
+          dailyData.totalCharacters + characterCount <=
+            this.DAILY_CHARACTER_LIMIT &&
+          monthlyData.totalCharacters + characterCount <=
+            this.MONTHLY_CHARACTER_LIMIT &&
+          yearlyData.totalCharacters + characterCount <=
+            this.YEARLY_CHARACTER_LIMIT,
+        dailyUsage: dailyData.totalCharacters,
+        monthlyUsage: monthlyData.totalCharacters,
+        yearlyUsage: yearlyData.totalCharacters,
         dailyLimit: this.DAILY_CHARACTER_LIMIT,
         monthlyLimit: this.MONTHLY_CHARACTER_LIMIT,
-        yearlyLimit: this.YEARLY_CHARACTER_LIMIT
+        yearlyLimit: this.YEARLY_CHARACTER_LIMIT,
       };
+
+      return result;
     } catch (error) {
-      console.error('Polly usage check error:', error);
+      console.error("Polly usage check error:", error);
       throw error;
     }
   }
 
   /**
-   * Record Polly usage in the database
+   * Fetch usage data for a specific time period
+   */
+  private static async fetchUsageForPeriod(
+    supabase: any,
+    userId: string,
+    start: Date,
+    end: Date
+  ) {
+    const { data, error } = await supabase
+      .from("polly_usage")
+      .select("characters_synthesized, voice_id")
+      .eq("user_id", userId)
+      .gte("synthesis_date", start.toISOString())
+      .lte("synthesis_date", end.toISOString());
+
+    if (error) throw error;
+
+    const totalCharacters = data.reduce(
+      (sum: number, record: any) => sum + record.characters_synthesized,
+      0
+    );
+
+    const voiceDistribution = data.reduce(
+      (acc: Record<string, number>, record: any) => {
+        acc[record.voice_id] =
+          (acc[record.voice_id] || 0) + record.characters_synthesized;
+        return acc;
+      },
+      {}
+    );
+
+    return { totalCharacters, voiceDistribution };
+  }
+
+  /**
+   * Record Polly usage with analytics and caching
    */
   static async recordUsage(
-    userId: string, 
-    characterCount: number, 
-    voiceId: string
+    userId: string,
+    characterCount: number,
+    voiceId: string,
+    textContent?: string
   ): Promise<PollyUsageRecord> {
     const supabase = await createClient();
 
@@ -114,133 +178,204 @@ export class PollyUsageTracker {
       user_id: userId,
       characters_synthesized: characterCount,
       voice_id: voiceId,
-      synthesis_date: new Date().toISOString()
+      synthesis_date: new Date().toISOString(),
+      content_hash: textContent
+        ? await this.hashContent(textContent)
+        : undefined,
     };
 
+    // Record in database
     const { data, error } = await supabase
-      .from('polly_usage')
+      .from("polly_usage")
       .insert(usageRecord)
       .select()
       .single();
 
     if (error) {
-      console.error('Failed to record Polly usage:', error);
+      console.error("Failed to record Polly usage:", error);
       throw error;
     }
+
+    // Track analytics
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await captureServerEvent("polly_synthesis", user, {
+      characters: characterCount,
+      voice_id: voiceId,
+      content_length: textContent?.length || 0,
+    });
+
+    // Invalidate cache
+    this.usageCache.delete(userId);
 
     return data;
   }
 
   /**
-   * Get detailed usage statistics for a user
+   * Get detailed usage statistics for a user with caching
    */
-  static async getUserUsageStats(userId: string) {
+  static async getUserUsageStats(userId: string): Promise<UserUsageStats> {
+    const cached = this.usageCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return cached.data;
+    }
+
     const supabase = await createClient();
     const now = new Date();
 
     // Prepare date ranges
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const yearStart = new Date(now.getFullYear(), 0, 1);
 
     try {
-      // Fetch usage data
-      const { data: dailyData, error: dailyError } = await supabase
-        .from('polly_usage')
-        .select('characters_synthesized, voice_id')
-        .eq('user_id', userId)
-        .gte('synthesis_date', todayStart.toISOString())
-        .lte('synthesis_date', now.toISOString());
+      // Fetch user with profile
+      const { data: userData } = await supabase
+        .from("users")
+        .select("id, email") // Remove profiles join
+        .eq("id", userId)
+        .single();
 
-      const { data: monthlyData, error: monthlyError } = await supabase
-        .from('polly_usage')
-        .select('characters_synthesized, voice_id')
-        .eq('user_id', userId)
-        .gte('synthesis_date', monthStart.toISOString())
-        .lte('synthesis_date', now.toISOString());
+      // Parallel fetch periods
+      const [daily, monthly, yearly] = await Promise.all([
+        this.fetchUsageForPeriod(supabase, userId, todayStart, now),
+        this.fetchUsageForPeriod(supabase, userId, monthStart, now),
+        this.fetchUsageForPeriod(supabase, userId, yearStart, now),
+      ]);
 
-      const { data: yearlyData, error: yearlyError } = await supabase
-        .from('polly_usage')
-        .select('characters_synthesized, voice_id')
-        .eq('user_id', userId)
-        .gte('synthesis_date', yearStart.toISOString())
-        .lte('synthesis_date', now.toISOString());
+      const user = userData as unknown as DatabaseUser;
+      const profile = user?.profiles?.[0];
+      const username = userData?.email?.split('@')[0] || userId;
+      // Get username with fallback
 
-      if (dailyError || monthlyError || yearlyError) {
-        throw new Error('Failed to retrieve usage statistics');
-      }
-
-      // Calculate usage statistics
-      const calculateStats = (data: any[]) => ({
-        totalCharacters: data.reduce((sum, record) => sum + record.characters_synthesized, 0),
-        voiceDistribution: data.reduce((acc, record) => {
-          acc[record.voice_id] = (acc[record.voice_id] || 0) + record.characters_synthesized;
-          return acc;
-        }, {})
-      });
-
-      return {
+      const stats: UserUsageStats = {
+        userId,
+        email: user?.email || null,
+        username, // Now properly assigned with fallback
         daily: {
-          ...calculateStats(dailyData),
-          limit: this.DAILY_CHARACTER_LIMIT
+          ...daily,
+          limit: this.DAILY_CHARACTER_LIMIT,
+          quotaRemaining: Math.max(
+            0,
+            this.DAILY_CHARACTER_LIMIT - daily.totalCharacters
+          ),
+          resetTime: todayStart.getTime() + 24 * 60 * 60 * 1000,
         },
         monthly: {
-          ...calculateStats(monthlyData),
-          limit: this.MONTHLY_CHARACTER_LIMIT
+          ...monthly,
+          limit: this.MONTHLY_CHARACTER_LIMIT,
+          quotaRemaining: Math.max(
+            0,
+            this.MONTHLY_CHARACTER_LIMIT - monthly.totalCharacters
+          ),
+          resetTime: monthStart.getTime() + 30 * 24 * 60 * 60 * 1000,
         },
         yearly: {
-          ...calculateStats(yearlyData),
-          limit: this.YEARLY_CHARACTER_LIMIT
-        }
+          ...yearly,
+          limit: this.YEARLY_CHARACTER_LIMIT,
+          quotaRemaining: Math.max(
+            0,
+            this.YEARLY_CHARACTER_LIMIT - yearly.totalCharacters
+          ),
+          resetTime: yearStart.getTime() + 365 * 24 * 60 * 60 * 1000,
+        },
       };
+
+      // Update cache
+      this.usageCache.set(userId, {
+        data: stats,
+        timestamp: Date.now(),
+      });
+
+      return stats;
     } catch (error) {
-      console.error('Failed to get user usage stats:', error);
+      console.error("Failed to get user usage stats:", error);
       throw error;
     }
   }
 
-  static async getAllUsageStats(): Promise<UserUsageStats[]> {
+  /**
+   * Get all users' usage statistics with pagination
+   */
+  static async getAllUsageStats(
+    page = 1,
+    limit = 100
+  ): Promise<{
+    stats: UserUsageStats[];
+    total: number;
+  }> {
     const supabase = await createClient();
-    
-    // Fetch user IDs from the users table
-    const { data: users, error: userError } = await supabase
-      .from('users')
-      .select('id')
-      .limit(100);
-  
-    // If there's an error or no users, return an empty array instead of throwing
+
+    const offset = (page - 1) * limit;
+
+    // Fetch users with pagination and their profiles
+    const {
+      data: users,
+      error: userError,
+      count,
+    } = await supabase
+      .from("users")
+      .select("id, email") // Remove profiles join for now
+      .range(offset, offset + limit - 1);
+
     if (userError) {
-      console.error('Error fetching users:', userError);
-      return [];
+      console.error("Error fetching users:", userError);
+      throw userError;
     }
-  
-    if (!users || users.length === 0) {
-      console.warn('No users found');
-      return [];
-    }
-  
-    const usageStats: UserUsageStats[] = [];
-  
-    for (const user of users) {
+
+    // Fetch stats for all users in parallel
+    const statsPromises = (users || []).map(async (rawUser) => {
       try {
-        // Try to get auth user to potentially fetch email
-        const { data: authUser } = await supabase.auth.getUser(user.id);
-        
-        const stats = await this.getUserUsageStats(user.id);
-        usageStats.push({
+        const user = rawUser as unknown as DatabaseUser;
+        const profile = user?.profiles?.[0];
+        const username =
+          profile?.username || user?.email?.split("@")[0] || user.id;
+
+        const userStats = await this.getUserUsageStats(user.id);
+        return {
+          ...userStats,
           userId: user.id,
-          email: authUser?.user?.email || null,
-          daily: stats.daily,
-          monthly: stats.monthly,
-          yearly: stats.yearly
-        });
+          email: user.email,
+          username,
+        };
       } catch (error) {
-        console.error(`Failed to get stats for user ${user.id}:`, error);
-        // Continue processing other users even if one fails
-        continue;
+        console.error(`Failed to get stats for user ${rawUser.id}:`, error);
+        return null;
       }
+    });
+
+    const results = await Promise.all(statsPromises);
+
+    return {
+      stats: results.filter((stat): stat is UserUsageStats => stat !== null),
+      total: count || 0,
+    };
+  }
+
+  /**
+   * Hash content for deduplication
+   */
+  private static async hashContent(content: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  /**
+   * Clear usage cache
+   */
+  static clearCache(userId?: string) {
+    if (userId) {
+      this.usageCache.delete(userId);
+    } else {
+      this.usageCache.clear();
     }
-  
-    return usageStats;
   }
 }

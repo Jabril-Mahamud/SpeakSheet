@@ -1,28 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import { File, Download, FileAudio, Loader2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFileManager, type FileData } from "@/hooks/useFileManager";
 import { formatDate } from "@/utils/dateFormat";
-import { createClient } from "@/utils/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getFileIcon } from "../common/FileIcon";
-import { useRouter } from "next/navigation";
 import DeleteButton from "../upload/delete-button";
 import { ConvertButton } from "../upload/convert-button";
 import { FileDialog } from "./FileDialog";
+import { useRealTimeFiles } from "@/hooks/useRealTimeFiles";
+import { FilterButton } from "../common/FilterButton";
 
-export function FileGrid({ files }: { files: FileData[] }) {
-  const [filter, setFilter] = useState<"all" | "txt" | "audio">("all");
+type FilterType = "all" | "txt" | "audio";
+
+export function FileGrid({ files: initialFiles }: { files: FileData[] }) {
+  const [filter, setFilter] = useState<FilterType>("all");
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
-  const [fileContent, setFileContent] = useState<string>("");
-  const [isConverting, setIsConverting] = useState(false);
-
   const { loading, handleDownload } = useFileManager();
-  const supabase = createClient();
-  const router = useRouter();
+  
+  const { 
+    files, 
+    fileContents, 
+    loadingContents, 
+    fetchFileContent,
+    removeFile 
+  } = useRealTimeFiles(initialFiles);
+
+  const handleView = async (file: FileData) => {
+    await fetchFileContent(file);
+    setSelectedFile(file);
+  };
+
+  const handleDeleteComplete = (fileId: string) => {
+    if (selectedFile?.id === fileId) {
+      setSelectedFile(null);
+    }
+  };
 
   const filteredFiles = files.filter((file) => {
     if (filter === "all") return true;
@@ -30,30 +45,6 @@ export function FileGrid({ files }: { files: FileData[] }) {
     if (filter === "audio") return file.file_type.includes("audio");
     return true;
   });
-
-  const handleView = async (file: FileData) => {
-    try {
-      if (file.file_type === "text/plain") {
-        const { data, error } = await supabase.storage
-          .from("files")
-          .download(file.file_path);
-
-        if (error) throw error;
-
-        const text = await data.text();
-        setFileContent(text);
-      }
-
-      setSelectedFile(file);
-    } catch (error) {
-      console.error("Error loading file:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load file content. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <>
@@ -85,50 +76,44 @@ export function FileGrid({ files }: { files: FileData[] }) {
           </div>
         ) : (
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {filteredFiles.map((currentFile) => (
+            {filteredFiles.map((file) => (
               <div
-                key={currentFile.id}
+                key={file.id}
                 className="p-4 bg-accent/50 rounded-lg flex items-center justify-between gap-4 hover:bg-accent/75 transition-colors cursor-pointer"
-                onClick={() => handleView(currentFile)}
+                onClick={() => handleView(file)}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  {getFileIcon(currentFile.file_type)}
+                  {getFileIcon(file.file_type)}
                   <div className="min-w-0">
                     <p className="font-medium truncate">
-                      {currentFile.original_name}
+                      {file.original_name}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {formatDate(currentFile.created_at)}
+                      {formatDate(file.created_at)}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                   <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDownload(currentFile);
-                    }}
-                    disabled={loading === currentFile.id}
+                    onClick={() => handleDownload(file)}
+                    disabled={loading === file.id}
                     variant="ghost"
                     size="icon"
                     title="Download"
                   >
-                    {loading === currentFile.id ? (
+                    {loading === file.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Download className="h-4 w-4" />
                     )}
                   </Button>
-                  {currentFile.file_type === "text/plain" && (
+                  {file.file_type === "text/plain" && (
                     <ConvertButton
-                      text={fileContent}
-                      fileName={currentFile.original_name}
-                      onProgress={(progress) => {
-                        // Handle progress if needed
-                      }}
+                      text={fileContents[file.id] || ''}
+                      fileName={file.original_name}
+                      onProgress={() => {}}
                       onComplete={() => {
-                        router.refresh();
                         toast({
                           title: "Success",
                           description: "Text converted to audio successfully",
@@ -141,19 +126,14 @@ export function FileGrid({ files }: { files: FileData[] }) {
                           variant: "destructive",
                         });
                       }}
-                      disabled={loading === currentFile.id}
+                      disabled={loading === file.id || loadingContents[file.id]}
                       iconOnly={true}
                     />
                   )}
                   <DeleteButton
-                    filePath={currentFile.file_path}
-                    fileId={currentFile.id}
-                    onComplete={() => {
-                      router.refresh();
-                      if (selectedFile?.id === currentFile.id) {
-                        setSelectedFile(null);
-                      }
-                    }}
+                    filePath={file.file_path}
+                    fileId={file.id}
+                    onComplete={() => handleDeleteComplete(file.id)}
                     onError={(error) => {
                       toast({
                         title: "Error",
@@ -161,7 +141,8 @@ export function FileGrid({ files }: { files: FileData[] }) {
                         variant: "destructive",
                       });
                     }}
-                    disabled={loading === currentFile.id}
+                    onOptimisticDelete={removeFile}
+                    disabled={loading === file.id}
                     iconOnly={true}
                   />
                 </div>
@@ -170,35 +151,16 @@ export function FileGrid({ files }: { files: FileData[] }) {
           </div>
         )}
       </div>
+
       {selectedFile && (
         <FileDialog
           mode="view"
           file={selectedFile}
-          content={fileContent}
+          content={fileContents[selectedFile.id] || ''}
           open={!!selectedFile}
-          onOpenChange={(open:any) => !open && setSelectedFile(null)}
+          onOpenChange={(open) => !open && setSelectedFile(null)}
         />
       )}
     </>
-  );
-}
-
-function FilterButton({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      onClick={onClick}
-      variant={active ? "default" : "secondary"}
-      size="sm"
-    >
-      {children}
-    </Button>
   );
 }
