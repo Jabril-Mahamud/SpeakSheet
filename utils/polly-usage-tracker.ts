@@ -1,52 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { captureServerEvent } from "@/utils/posthog-server";
-
-interface UserProfile {
-  username: string | null;
-  full_name: string | null;
-}
-
-interface UserWithProfile {
-  id: string;
-  email: string | null;
-  profiles: UserProfile | null;
-}
-export interface UserUsageStats {
-  userId: string;
-  email: string | null;
-  username: string;
-  daily: UsagePeriodStats;
-  monthly: UsagePeriodStats;
-  yearly: UsagePeriodStats;
-}
-
-export interface UsagePeriodStats {
-  totalCharacters: number;
-  limit: number;
-  voiceDistribution: Record<string, number>;
-  quotaRemaining: number;
-  resetTime: number;
-}
-
-export interface PollyUsageRecord {
-  id?: number;
-  user_id: string;
-  characters_synthesized: number;
-  voice_id: string;
-  synthesis_date: string;
-  content_hash?: string;
-}
-
-interface DatabaseUser {
-  id: string;
-  email: string | null;
-  profiles:
-    | {
-        username: string | null;
-        full_name: string | null;
-      }[]
-    | null; // Change to array since Supabase returns it as array
-}
+import { UserUsageStats, PollyUsageRecord, DatabaseUser } from "./types";
 
 export class PollyUsageTracker {
   // Configurable limits

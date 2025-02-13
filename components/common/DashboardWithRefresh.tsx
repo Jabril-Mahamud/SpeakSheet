@@ -1,8 +1,8 @@
 'use client';
 
-import { UserUsageStats } from '@/utils/polly-usage-tracker';
 import { useRouter } from 'next/navigation';
 import { PollyDashboard } from './PollyDashboard';
+import { UserUsageStats } from '@/utils/types';
 
 export function DashboardWithRefresh({ 
   usageStats, 
