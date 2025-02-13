@@ -31,9 +31,9 @@ import {
   Activity,
   Info,
 } from "lucide-react";
-import { UserUsageStats, UsagePeriodStats } from "@/utils/polly-usage-tracker";
 import { getResetTimeString } from "@/utils/utils";
 import { useTheme } from "next-themes";
+import { UserUsageStats } from "@/utils/types";
 
 interface PollyDashboardProps {
   usageStats: UserUsageStats[];

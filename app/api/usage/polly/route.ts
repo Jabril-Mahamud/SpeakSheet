@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { PollyUsageTracker, UserUsageStats, UsagePeriodStats } from '@/utils/polly-usage-tracker';
 import { captureServerEvent } from '@/utils/posthog-server';
+import { PollyUsageTracker } from '@/utils/polly-usage-tracker';
+import { UserUsageStats } from '@/utils/types';
 
 // Cache expiry in milliseconds (5 minutes)
 const CACHE_EXPIRY = 5 * 60 * 1000;
