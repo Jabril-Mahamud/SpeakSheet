@@ -27,7 +27,7 @@ const NameHoverCard = () => {
               backgroundSize: "300% 300%",
             }}
           >
-            AlexandrAI
+            AudioScribe
           </motion.span>
         </Link>
       </HoverCardTrigger>

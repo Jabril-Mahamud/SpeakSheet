@@ -1,7 +1,7 @@
-# AlexandrAI
+# AudioScribe
 
 ## Overview
-AlexandrAI is a **PDF to Audio Converter** that transforms PDFs into high-quality speech using AI-driven text-to-speech (TTS) services. Users can upload files, select from multiple voice options, and generate natural-sounding audio files. Future updates will include audiobook organization and cross-device syncing.
+AudioScribe is a **PDF to Audio Converter** that transforms PDFs into high-quality speech using AI-driven text-to-speech (TTS) services. Users can upload files, select from multiple voice options, and generate natural-sounding audio files. Future updates will include audiobook organization and cross-device syncing.
 
 ## Features
 - **PDF to Audio Conversion**: Upload a PDF and convert it to speech.
@@ -23,11 +23,11 @@ AlexandrAI is a **PDF to Audio Converter** that transforms PDFs into high-qualit
 ## Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-repo/AlexandrAI.git
+   git clone https://github.com/your-repo/AudioScribe.git
    ```
 2. Navigate to the project folder:
    ```bash
-   cd AlexandrAI
+   cd AudioScribe
    ```
 3. Install dependencies:
    ```bash

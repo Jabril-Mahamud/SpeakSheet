@@ -74,3 +74,71 @@ export interface ConvertButtonProps {
   disabled?: boolean;
   iconOnly?: boolean;
 }
+
+export interface TTSSettings {
+  default_service: string;
+  aws_polly_voice?: string;
+  elevenlabs_voice_id?: string;
+  elevenlabs_stability?: number;
+  elevenlabs_similarity_boost?: number;
+  api_key?: string;
+}
+
+export interface ConvertButtonProps {
+  text: string;
+  fileName: string;
+  onProgress: (progress: number) => void;
+  onComplete: () => void;
+  onError: (error: string) => void;
+  disabled?: boolean;
+  iconOnly?: boolean;
+}
+
+
+export interface UserProfile {
+  username: string | null;
+  full_name: string | null;
+}
+
+export interface UserWithProfile {
+  id: string;
+  email: string | null;
+  profiles: UserProfile | null;
+}
+export interface UserUsageStats {
+  userId: string;
+  email: string | null;
+  username: string;
+  daily: UsagePeriodStats;
+  monthly: UsagePeriodStats;
+  yearly: UsagePeriodStats;
+}
+
+export interface UsagePeriodStats {
+  totalCharacters: number;
+  limit: number;
+  voiceDistribution: Record<string, number>;
+  quotaRemaining: number;
+  resetTime: number;
+  lastUsedAt?: string; // Optional timestamp of last usage
+}
+
+export interface PollyUsageRecord {
+  id?: number;
+  user_id: string;
+  characters_synthesized: number;
+  voice_id: string;
+  synthesis_date: string;
+  content_hash?: string;
+}
+
+export interface DatabaseUser {
+  id: string;
+  email: string | null;
+  profiles:
+    | {
+        username: string | null;
+        full_name: string | null;
+      }[]
+    | null; // Change to array since Supabase returns it as array
+}
