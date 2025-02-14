@@ -14,13 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-interface Voice {
-  voice_id: string;
-  name: string;
-  preview_url?: string;
-  category?: string;
-}
+import { Voice } from "@/utils/types";
 
 export default function TtsSettingsForm() {
   const [settings, setSettings] = useState({
@@ -30,7 +24,7 @@ export default function TtsSettingsForm() {
     elevenlabs_voice_id: "",
     elevenlabs_stability: 0.5,
     elevenlabs_similarity_boost: 0.75,
-    custom_voice_id: "", // New field for custom voice ID
+    custom_voice_id: "",
   });
   const [voices, setVoices] = useState<Record<string, any[]>>({});
   const [elevenLabsVoices, setElevenLabsVoices] = useState<Voice[]>([]);

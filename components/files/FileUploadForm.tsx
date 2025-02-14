@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { InfoIcon, Upload, Loader2 } from "lucide-react";
 import { useFileUpload } from "@/hooks/useFileUpload";
 import { toast } from "@/hooks/use-toast";
+import { FileUploadFormProps } from "@/utils/types";
 
-interface FileUploadFormProps {
-  onSuccess?: () => void;
-}
+
 
 export function FileUploadForm({ onSuccess }: FileUploadFormProps) {
   const { files, setFiles, uploading, handleUpload, validateFiles } = useFileUpload();

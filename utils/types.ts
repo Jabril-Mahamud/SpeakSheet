@@ -1,3 +1,5 @@
+import { LucideIcon } from "lucide-react";
+
 // File and Upload related types
 export interface FileRecord {
   id: string;
@@ -82,16 +84,20 @@ export interface UserWithProfile {
 
 // TTS and Settings types
 export interface TTSSettings {
-  id?: string;
-  default_service: string;
-  aws_polly_voice?: string;
-  elevenlabs_voice_id?: string;
-  elevenlabs_stability?: number;
-  elevenlabs_similarity_boost?: number;
-  api_key?: string;
-  created_at?: string;
-  updated_at?: string;
+  id: string;
+  tts_service: string;
+  api_key?: string | null;
+  aws_polly_voice?: string | null;
+  created_at: string;
+  updated_at: string;
 }
+
+export interface TTSSettingsUpdatePayload {
+  tts_service: string;
+  api_key?: string | null;
+  aws_polly_voice?: string | null;
+}
+
 
 // Usage and Statistics types
 export interface UsagePeriodStats {
@@ -119,4 +125,71 @@ export interface PollyUsageRecord {
   voice_id: string;
   synthesis_date: string;
   content_hash?: string;
+}
+
+export interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: LucideIcon;
+  subtext: string;
+}
+
+export interface FileUploadFormProps {
+  onSuccess?: () => void;
+}
+export interface AdminSettings {
+  default_voice_id: string;
+  rate_limit_daily: number;
+  rate_limit_monthly: number;
+  max_file_size_mb: number;
+  require_email_verification: boolean;
+  allow_public_sharing: boolean;
+  maintenance_mode: boolean;
+}
+
+export interface PollyDashboardProps {
+  usageStats: UserUsageStats[];
+  onRefresh?: () => Promise<void>;
+}
+
+export interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+}
+export interface Voice {
+  voice_id: string;
+  name: string;
+  preview_url?: string;
+  category?: string;
+}
+
+export interface UsageStats {
+  totalUsers: number;
+  dailyTotal: number;
+  trends: Array<{
+    date: string;
+    characters: number;
+  }>;
+  users: Array<{
+    id: string;
+    username: string;
+    email: string;
+    isActive: boolean;
+    charactersUsed: number;
+    lastActive: string;
+  }>;
+}
+
+export interface FileStats {
+  totalFiles: number;
+  successRate: number;
+  files: Array<{
+    id: string;
+    name: string;
+    user: string;
+    status: 'completed' | 'processing' | 'failed';
+    createdAt: string;
+    size: string;
+  }>;
 }

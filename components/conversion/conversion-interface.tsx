@@ -1,252 +1,290 @@
 'use client'
 
-import { useState } from 'react'
-import { createClient } from "@/utils/supabase/client"
-import { File, RefreshCw, ArrowRight, CheckCircle, XCircle } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
+import { useState, useRef, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Play, Pause, RotateCcw, Download, Loader2, Volume2, VolumeX } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Slider } from "@/components/ui/slider";
+import { useRouter } from "next/navigation";
+import { useFileManager } from "@/hooks/useFileManager";
+import { ConvertButton } from "../upload/convert-button";
+import DeleteButton from "../upload/delete-button";
+import { FileDialogProps, FileData } from "@/utils/types";
+import { FileUploadForm } from "../files/FileUploadForm";
 
-interface FileData {
-  id: string
-  file_path: string
-  original_name: string
-  created_at: string
-  conversion_status: string
-  audio_file_path: string | null
-  voice_id: string | null
-  conversion_error: string | null
-}
+export function FileDialog({
+  title = "Upload Files",
+  file = null,
+  mode = 'upload',
+  open = false,
+  onOpenChange,
+  content = '',
+}: FileDialogProps) {
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const supabase = createClient();
+  const router = useRouter();
+  const { loading, handleDownload } = useFileManager();
 
-const VOICES = [
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel" },
-  { id: "AZnzlk1XvdvUeBnXmlld", name: "Domi" },
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella" },
-  { id: "ErXwobaYiN019PkySvjV", name: "Antoni" },
-  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli" },
-  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh" },
-  { id: "VR6AewLTigWG4xSOukaG", name: "Arnold" },
-  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam" },
-  { id: "yoZ06aMxZJJ28mfd3POQ", name: "Sam" }
-]
+  useEffect(() => {
+    if (file && file.file_type.includes('audio') && open) {
+      const loadAudio = async () => {
+        try {
+          const { data, error } = await supabase.storage
+            .from('files')
+            .download(file.file_path);
 
-export default function ConversionInterface({ initialFiles }: { initialFiles: FileData[] }) {
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null)
-  const [converting, setConverting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const supabase = createClient()
-  const router = useRouter()
+          if (error) throw error;
 
-  const selectedFile = initialFiles.find(f => f.id === selectedFileId)
+          const url = URL.createObjectURL(data);
+          setAudioUrl(url);
+        } catch (error) {
+          console.error('Error loading audio:', error);
+        }
+      };
 
-  const handleConvert = async () => {
-    if (!selectedFileId || !selectedVoiceId) {
-      setError('Please select both a PDF file and a voice')
-      return
+      loadAudio();
     }
 
-    try {
-      setConverting(true)
-      setError(null)
-
-      // Update status to converting
-      const { error: updateError } = await supabase
-        .from('files')
-        .update({ 
-          conversion_status: 'converting (0/0 chunks)',
-          voice_id: selectedVoiceId,
-          conversion_error: null 
-        })
-        .eq('id', selectedFileId)
-
-      if (updateError) throw updateError
-
-      // Call conversion API
-      const response = await fetch('/api/convert', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          fileId: selectedFileId, 
-          voiceId: selectedVoiceId 
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Conversion failed')
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+        setAudioUrl(null);
       }
+    };
+  }, [file, open]);
 
-      router.refresh()
-    } catch (error) {
-      console.error('Conversion error:', error)
-      setError(error instanceof Error ? error.message : 'Conversion failed')
-      
-      // Update status to error
-      await supabase
-        .from('files')
-        .update({ 
-          conversion_status: 'error',
-          conversion_error: error instanceof Error ? error.message : 'Unknown error' 
-        })
-        .eq('id', selectedFileId)
-    } finally {
-      setConverting(false)
-    }
-  }
-
-  // Helper function to get display message from conversion status
-  const getStatusDisplay = (status: string) => {
-    if (status.startsWith('converting (')) {
-      return 'Converting...'
-    }
-    return status === 'completed' ? 'Conversion completed' : 
-           status === 'error' ? 'Conversion failed' : 
-           'Converting...'
-  }
-
-  // Helper function to get progress from conversion status
-  const getProgress = (status: string) => {
-    if (status.startsWith('converting (')) {
-      const match = status.match(/converting \((\d+)\/(\d+) chunks\)/)
-      if (match) {
-        const [current, total] = match.slice(1).map(Number)
-        return total > 0 ? Math.round((current / total) * 100) : 0
+  useEffect(() => {
+    if (!open) {
+      setIsPlaying(false);
+      setCurrentTime(0);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       }
     }
-    return null
-  }
+  }, [open]);
 
-  if (initialFiles.length === 0) {
-    return (
-      <div className="text-center p-12 border-2 border-dashed border-accent rounded-lg">
-        <p className="text-muted-foreground">No PDF files found</p>
-      </div>
-    )
-  }
+  const togglePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleSliderChange = (value: number[]) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = value[0];
+      setCurrentTime(value[0]);
+    }
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+      setIsMuted(newVolume === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    if (audioRef.current) {
+      const newMutedState = !isMuted;
+      setIsMuted(newMutedState);
+      audioRef.current.volume = newMutedState ? 0 : volume;
+    }
+  };
+
+  const resetAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      setCurrentTime(0);
+      setIsPlaying(false);
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div className="space-y-8">
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid gap-6">
-            {/* Step 1: Select PDF */}
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold">1. Select PDF</h2>
-              <Select
-                value={selectedFileId || ''}
-                onValueChange={setSelectedFileId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a PDF file" />
-                </SelectTrigger>
-                <SelectContent>
-                  {initialFiles.map((file) => (
-                    <SelectItem key={file.id} value={file.id}>
-                      {file.original_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Step 2: Select Voice */}
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold">2. Select Voice</h2>
-              <Select
-                value={selectedVoiceId || ''}
-                onValueChange={setSelectedVoiceId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a voice" />
-                </SelectTrigger>
-                <SelectContent>
-                  {VOICES.map((voice) => (
-                    <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Step 3: Convert */}
-            <div className="pt-2">
-              <button
-                onClick={handleConvert}
-                disabled={!selectedFileId || !selectedVoiceId || converting}
-                className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {converting ? (
-                  <>
-                    <RefreshCw size={18} className="animate-spin" />
-                    Converting...
-                  </>
-                ) : (
-                  <>
-                    Convert to Audio
-                    <ArrowRight size={18} />
-                  </>
-                )}
-              </button>
-            </div>
-
-            {error && (
-              <div className="bg-destructive/10 text-destructive p-3 rounded-md">
-                {error}
-              </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] w-[90vw]">
+        <DialogHeader className="px-6 py-4 flex flex-row items-center justify-between">
+          <DialogTitle className="text-xl">
+            {mode === 'view' && file ? file.original_name : title}
+          </DialogTitle>
+          <div className="flex items-center gap-2">
+            {file?.file_type === "text/plain" && (
+              <ConvertButton
+                text={content}
+                fileName={file.original_name}
+                onProgress={() => {}}
+                onComplete={() => {
+                  router.refresh();
+                  onOpenChange?.(false);
+                }}
+                onError={(error) => {
+                  console.error('Conversion error:', error);
+                }}
+              />
+            )}
+            {file && (
+              <>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownload(file);
+                  }}
+                  disabled={loading === file.id}
+                  variant="secondary"
+                  size="sm"
+                  className="gap-2"
+                >
+                  {loading === file.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Download
+                </Button>
+                <DeleteButton
+                  filePath={file.file_path}
+                  fileId={file.id}
+                  onComplete={() => {
+                    router.refresh();
+                    onOpenChange?.(false);
+                  }}
+                  onError={(error) => {
+                    console.error('Delete error:', error);
+                  }}
+                />
+              </>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Show conversion results */}
-      {selectedFile && selectedFile.conversion_status && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="shrink-0">
-                {selectedFile.conversion_status.includes('converting') && (
-                  <RefreshCw size={20} className="animate-spin text-primary" />
-                )}
-                {selectedFile.conversion_status === 'completed' && (
-                  <CheckCircle size={20} className="text-green-500" />
-                )}
-                {selectedFile.conversion_status === 'error' && (
-                  <XCircle size={20} className="text-destructive" />
-                )}
-              </div>
+        </DialogHeader>
+       
+        <div className="p-6">
+          {mode === 'upload' ? (
+            <FileUploadForm onSuccess={() => onOpenChange?.(false)} />
+          ) : file?.file_type.includes('audio') ? (
+            <div className="space-y-6">
+              <audio
+                ref={audioRef}
+                src={audioUrl || undefined}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={() => setIsPlaying(false)}
+              />
               
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">
-                  {selectedFile.original_name}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {getStatusDisplay(selectedFile.conversion_status)}
-                  {getProgress(selectedFile.conversion_status) !== null && (
-                    <> - {getProgress(selectedFile.conversion_status)}%</>
+              <div className="flex items-center justify-center gap-6">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-12 w-12"
+                  onClick={resetAudio}
+                  disabled={!audioUrl}
+                >
+                  <RotateCcw className="h-6 w-6" />
+                </Button>
+                <Button
+                  onClick={togglePlayPause}
+                  disabled={!audioUrl}
+                  variant="outline"
+                  size="icon"
+                  className="h-12 w-12"
+                >
+                  {isPlaying ? (
+                    <Pause className="h-6 w-6" />
+                  ) : (
+                    <Play className="h-6 w-6" />
                   )}
-                </p>
-                {selectedFile.conversion_error && (
-                  <p className="text-sm text-destructive mt-1">
-                    {selectedFile.conversion_error}
-                  </p>
-                )}
+                </Button>
               </div>
 
-              {selectedFile.conversion_status === 'completed' && selectedFile.audio_file_path && (
-                <audio
-                  controls
-                  className="h-8"
-                  src={`/api/audio/${selectedFile.id}`}
+              <div className="space-y-2">
+                <Slider
+                  value={[currentTime]}
+                  max={duration}
+                  step={0.1}
+                  onValueChange={handleSliderChange}
+                  disabled={!audioUrl}
+                  className="cursor-pointer"
                 />
-              )}
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>{formatTime(currentTime)}</span>
+                  <span>{formatTime(duration)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 w-full max-w-xl mx-auto">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-foreground"
+                  onClick={toggleMute}
+                  disabled={!audioUrl}
+                >
+                  {isMuted ? (
+                    <VolumeX className="h-4 w-4" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </Button>
+                <Slider
+                  value={[isMuted ? 0 : volume]}
+                  max={1}
+                  step={0.01}
+                  onValueChange={handleVolumeChange}
+                  disabled={!audioUrl}
+                  className="flex-1 cursor-pointer"
+                />
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
+          ) : file?.file_type === "text/plain" ? (
+            <ScrollArea className="h-[60vh] w-full rounded-md border">
+              <div className="whitespace-pre-wrap font-mono text-sm p-4">
+                {content}
+              </div>
+            </ScrollArea>
+          ) : (
+            <div className="p-4 text-center text-muted-foreground">
+              This file type cannot be previewed
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }

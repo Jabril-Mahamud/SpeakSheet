@@ -57,44 +57,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from '@/hooks/use-toast';
+import { FileStats, StatCardProps, UsageStats } from '@/utils/types';
 
-// Types
-interface UsageStats {
-  totalUsers: number;
-  dailyTotal: number;
-  trends: Array<{
-    date: string;
-    characters: number;
-  }>;
-  users: Array<{
-    id: string;
-    username: string;
-    email: string;
-    isActive: boolean;
-    charactersUsed: number;
-    lastActive: string;
-  }>;
-}
-
-interface FileStats {
-  totalFiles: number;
-  successRate: number;
-  files: Array<{
-    id: string;
-    name: string;
-    user: string;
-    status: 'completed' | 'processing' | 'failed';
-    createdAt: string;
-    size: string;
-  }>;
-}
-
-interface StatCardProps {
-  title: string;
-  value: string | number;
-  icon: LucideIcon;
-  subtext: string;
-}
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');

@@ -1,15 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { captureServerEvent } from "@/utils/posthog-server";
-
-interface TtsSettings {
-  id: string;
-  tts_service: string;
-  api_key?: string;
-  aws_polly_voice?: string;
-  created_at: string;
-  updated_at: string;
-}
+import { TTSSettings, TTSSettingsUpdatePayload } from '@/utils/types';
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -25,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('user_tts_settings')
-      .select<'*', TtsSettings>('*')
+      .select<'*', TTSSettings>('*')
       .eq('id', user.id)
       .single();
     
@@ -81,7 +73,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ttsSettings: Partial<TtsSettings> = {
+    const ttsSettings: Partial<TTSSettings> = {
       id: user.id,
       tts_service,
       api_key: api_key || null,

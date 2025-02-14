@@ -13,16 +13,8 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Save } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
+import { AdminSettings } from '@/utils/types';
 
-interface AdminSettings {
-  default_voice_id: string;
-  rate_limit_daily: number;
-  rate_limit_monthly: number;
-  max_file_size_mb: number;
-  require_email_verification: boolean;
-  allow_public_sharing: boolean;
-  maintenance_mode: boolean;
-}
 
 export const AdminSettingsTab = () => {
   const { toast } = useToast();

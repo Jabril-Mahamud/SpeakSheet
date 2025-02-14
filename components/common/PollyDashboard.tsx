@@ -33,18 +33,9 @@ import {
 } from "lucide-react";
 import { getResetTimeString } from "@/utils/utils";
 import { useTheme } from "next-themes";
-import { UserUsageStats } from "@/utils/types";
+import { CustomTooltipProps, PollyDashboardProps, UserUsageStats } from "@/utils/types";
 
-interface PollyDashboardProps {
-  usageStats: UserUsageStats[];
-  onRefresh?: () => Promise<void>;
-}
 
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: any[];
-  label?: string;
-}
 
 const CustomBarTooltip: React.FC<CustomTooltipProps> = ({
   active,

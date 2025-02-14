@@ -1,15 +1,8 @@
 'use client'
+import { FileData, StatCardProps } from "@/utils/types";
 import { FileIcon, FileAudioIcon, Clock } from "lucide-react";
 import { useRouter } from 'next/navigation';
-import { type FileData } from "@/hooks/useFileManager";
 
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  subtitle?: string;
-  href?: string;
-}
 
 function StatCard({ icon, label, value, subtitle, href }: StatCardProps) {
   const router = useRouter();
