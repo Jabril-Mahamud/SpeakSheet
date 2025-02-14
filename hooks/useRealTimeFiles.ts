@@ -1,8 +1,8 @@
 // hooks/useRealTimeFiles.ts
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from "@/utils/supabase/client";
-import { FileData } from './useFileManager';
 import { toast } from './use-toast';
+import { FileData } from '@/utils/types';
 
 export function useRealTimeFiles(initialFiles: FileData[]) {
   const [files, setFiles] = useState<FileData[]>(initialFiles);

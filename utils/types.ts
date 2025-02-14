@@ -1,26 +1,22 @@
-export type FileUploadProps = {
-  children: React.ReactNode;
-};
-export type UploadFormProps = {
-  onSubmit: (e: React.FormEvent) => Promise<void>;
-  files: FileList | null;
-  error: string | null;
-  uploading: boolean;
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-};
-export interface TtsSettings {
-  id: string;
-  tts_service: string;
-  api_key?: string;
-  aws_polly_voice?: string;
-  created_at: string;
-  updated_at: string;
-}
-
+// File and Upload related types
 export interface FileRecord {
   id: string;
   file_path: string;
+  file_type?: string;
+  original_name?: string;
+  created_at?: string;
 }
+
+export interface FileData extends FileRecord {
+  file_type: string;
+  original_name: string;
+  created_at: string;
+}
+
+export type FileUploadProps = {
+  children: React.ReactNode;
+  onSuccess?: () => void;
+};
 
 export interface UploadProgress {
   fileName: string;
@@ -29,10 +25,11 @@ export interface UploadProgress {
   fileRecord?: FileRecord;
 }
 
+// File Progress related types
 export interface FileProgressItemProps {
   file: File;
   progress?: UploadProgress;
-  showButtons: boolean; 
+  showButtons: boolean;
   isText: boolean;
   convertedText?: string;
   onUpdateProgress: (fileName: string, progress: number) => void;
@@ -40,6 +37,7 @@ export interface FileProgressItemProps {
   onConvertError: (error: string) => void;
   getStatusText: (status: UploadProgress["status"]) => string;
 }
+
 export interface FileProgressListProps {
   files: FileList;
   uploadProgress: Record<string, UploadProgress>;
@@ -49,15 +47,10 @@ export interface FileProgressListProps {
   onConvertError: (error: string) => void;
 }
 
+// Dialog and UI Component types
 export interface FileDialogProps {
   title?: string;
-  file?: {
-    id: string;
-    file_path: string;
-    file_type: string;
-    original_name: string;
-    created_at: string; 
-  } | null;
+  file?: FileData | null;
   mode?: 'upload' | 'view';
   open: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -75,26 +68,7 @@ export interface ConvertButtonProps {
   iconOnly?: boolean;
 }
 
-export interface TTSSettings {
-  default_service: string;
-  aws_polly_voice?: string;
-  elevenlabs_voice_id?: string;
-  elevenlabs_stability?: number;
-  elevenlabs_similarity_boost?: number;
-  api_key?: string;
-}
-
-export interface ConvertButtonProps {
-  text: string;
-  fileName: string;
-  onProgress: (progress: number) => void;
-  onComplete: () => void;
-  onError: (error: string) => void;
-  disabled?: boolean;
-  iconOnly?: boolean;
-}
-
-
+// User and Profile types
 export interface UserProfile {
   username: string | null;
   full_name: string | null;
@@ -105,6 +79,30 @@ export interface UserWithProfile {
   email: string | null;
   profiles: UserProfile | null;
 }
+
+// TTS and Settings types
+export interface TTSSettings {
+  id?: string;
+  default_service: string;
+  aws_polly_voice?: string;
+  elevenlabs_voice_id?: string;
+  elevenlabs_stability?: number;
+  elevenlabs_similarity_boost?: number;
+  api_key?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Usage and Statistics types
+export interface UsagePeriodStats {
+  totalCharacters: number;
+  limit: number;
+  voiceDistribution: Record<string, number>;
+  quotaRemaining: number;
+  resetTime: number;
+  lastUsedAt?: string;
+}
+
 export interface UserUsageStats {
   userId: string;
   email: string | null;
@@ -114,15 +112,6 @@ export interface UserUsageStats {
   yearly: UsagePeriodStats;
 }
 
-export interface UsagePeriodStats {
-  totalCharacters: number;
-  limit: number;
-  voiceDistribution: Record<string, number>;
-  quotaRemaining: number;
-  resetTime: number;
-  lastUsedAt?: string; // Optional timestamp of last usage
-}
-
 export interface PollyUsageRecord {
   id?: number;
   user_id: string;
@@ -130,15 +119,4 @@ export interface PollyUsageRecord {
   voice_id: string;
   synthesis_date: string;
   content_hash?: string;
-}
-
-export interface DatabaseUser {
-  id: string;
-  email: string | null;
-  profiles:
-    | {
-        username: string | null;
-        full_name: string | null;
-      }[]
-    | null; // Change to array since Supabase returns it as array
 }

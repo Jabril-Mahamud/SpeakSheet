@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { createClient } from "@/utils/supabase/client";
+import { FileData } from '@/utils/types';
 
-export interface FileData {
-  id: string;
-  file_path: string;
-  file_type: string;
-  original_name: string;
-  created_at: string;
-}
 
 export function useFileManager() {
   const [loading, setLoading] = useState<string | null>(null);

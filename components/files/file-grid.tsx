@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useFileManager, type FileData } from "@/hooks/useFileManager";
+import { useFileManager } from "@/hooks/useFileManager";
 import { formatDate } from "@/utils/dateFormat";
 import { toast } from "@/hooks/use-toast";
 import { getFileIcon } from "../common/FileIcon";
@@ -12,6 +12,7 @@ import { ConvertButton } from "../upload/convert-button";
 import { FileDialog } from "./FileDialog";
 import { useRealTimeFiles } from "@/hooks/useRealTimeFiles";
 import { FilterButton } from "../common/FilterButton";
+import { FileData } from "@/utils/types";
 
 type FilterType = "all" | "txt" | "audio";
 
