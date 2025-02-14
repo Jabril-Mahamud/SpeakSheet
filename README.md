@@ -5,7 +5,7 @@ AudioScribe is a **PDF to Audio Converter** that transforms PDFs into high-quali
 
 ## Features
 - **PDF to Audio Conversion**: Upload a PDF and convert it to speech.
-- **Multiple TTS Services**: Currently supports Amazon Polly, with planned integration for ElevenLabs (priority) and Google TTS.
+- **Multiple TTS Services**: Currently supports Amazon Polly, ElevenLabs (priority) and with planned integration for Google TTS.
 - **File Upload with Supabase**: Securely upload and process files using Supabase.
 - **Future Audiobook Library**: Organize and store converted audio for easy access.
 
