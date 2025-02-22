@@ -1,12 +1,13 @@
-import TtsSettingsForm from "@/components/common/TtsSettingsForm";
-import { createClient } from "@/utils/supabase/server";
-import { InfoIcon, Settings2, User, Shield } from "lucide-react";
+import { InfoIcon, Settings2, User, Shield, Activity } from "lucide-react";
 import { redirect } from "next/navigation";
+import { createClient } from "@/utils/supabase/server";
+import TtsSettingsForm from "@/components/common/TtsSettingsForm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import posthog from "posthog-js";
+import { PollyUsageLimitCard } from "@/components/common/PollyUsageLimitCard";
 
 export default async function ProtectedPage() {
   const supabase = await createClient();
@@ -78,6 +79,19 @@ export default async function ProtectedPage() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                <CardTitle>Usage Statistics</CardTitle>
+              </div>
+              <CardDescription>Track your Polly voice synthesis usage</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PollyUsageLimitCard />
             </CardContent>
           </Card>
 

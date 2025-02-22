@@ -2,73 +2,54 @@
 import { createClient } from '@/utils/supabase/server';
 
 export interface UsageLimits {
-  withinLimits: boolean;
-  dailyUsage: number;
-  monthlyUsage: number;
-  yearlyUsage: number;
-  dailyLimit: number;
+  allowed: boolean;
+  currentUsage: number;
+  remainingCharacters: number;
   monthlyLimit: number;
-  yearlyLimit: number;
 }
 
 export class PollyUsageTracker {
-  private static readonly DEFAULT_LIMITS = {
-    daily: 10000,    // 10k characters per day
-    monthly: 100000, // 100k characters per month
-    yearly: 1000000  // 1M characters per year
-  };
+  private static readonly MONTHLY_LIMIT = 10000; // 10k characters per month
 
   static async checkUsageLimits(userId: string, charactersToAdd: number): Promise<UsageLimits> {
     const supabase = await createClient();
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
+    const startOfMonth = new Date(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      1
+    ).toISOString();
 
-    // Get current usage
-    const [dailyStats, monthlyStats, yearlyStats] = await Promise.all([
-      supabase
-        .from('polly_usage')
-        .select('characters_synthesized')
-        .eq('user_id', userId)
-        .gte('synthesis_date', startOfDay),
-      supabase
-        .from('polly_usage')
-        .select('characters_synthesized')
-        .eq('user_id', userId)
-        .gte('synthesis_date', startOfMonth),
-      supabase
-        .from('polly_usage')
-        .select('characters_synthesized')
-        .eq('user_id', userId)
-        .gte('synthesis_date', startOfYear)
-    ]);
+    const { data: usage, error } = await supabase
+      .from('polly_usage')
+      .select('characters_synthesized')
+      .eq('user_id', userId)
+      .gte('synthesis_date', startOfMonth);
 
-    const dailyUsage = dailyStats.data?.reduce((sum, row) => sum + row.characters_synthesized, 0) || 0;
-    const monthlyUsage = monthlyStats.data?.reduce((sum, row) => sum + row.characters_synthesized, 0) || 0;
-    const yearlyUsage = yearlyStats.data?.reduce((sum, row) => sum + row.characters_synthesized, 0) || 0;
+    if (error) {
+      throw new Error(`Failed to fetch usage data: ${error.message}`);
+    }
+
+    const currentUsage = usage?.reduce(
+      (sum, row) => sum + (row.characters_synthesized || 0),
+      0
+    ) || 0;
+
+    const remainingCharacters = this.MONTHLY_LIMIT - currentUsage;
 
     return {
-      withinLimits: 
-        (dailyUsage + charactersToAdd) <= this.DEFAULT_LIMITS.daily &&
-        (monthlyUsage + charactersToAdd) <= this.DEFAULT_LIMITS.monthly &&
-        (yearlyUsage + charactersToAdd) <= this.DEFAULT_LIMITS.yearly,
-      dailyUsage,
-      monthlyUsage,
-      yearlyUsage,
-      dailyLimit: this.DEFAULT_LIMITS.daily,
-      monthlyLimit: this.DEFAULT_LIMITS.monthly,
-      yearlyLimit: this.DEFAULT_LIMITS.yearly
+      allowed: remainingCharacters >= charactersToAdd,
+      currentUsage,
+      remainingCharacters,
+      monthlyLimit: this.MONTHLY_LIMIT
     };
   }
 
   static async recordUsage(
-    userId: string, 
-    characters: number, 
+    userId: string,
+    characters: number,
     voiceId: string
   ): Promise<void> {
     const supabase = await createClient();
-
     const { error } = await supabase
       .from('polly_usage')
       .insert({
