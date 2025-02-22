@@ -48,6 +48,7 @@ AudioScribe is a **PDF to Audio Converter** that transforms PDFs into high-quali
 ## Roadmap
 - [x] **AWS Polly Usage Tracking**: Implement monitoring to prevent excessive API costs.
 - [x] **ElevenLabs Integration**: Add support for ElevenLabs TTS.
+- [x] **Expansion function**: Add support for expanding text from simple bullet points.
 - [ ] **Google TTS Integration**: Implement Google TTS as an additional voice option.
 - [ ] **Audiobook Library Management**: Enable organization and storage of converted audio.
 - [ ] **Cross-Device Syncing**: Ensure seamless playback across multiple devices.
