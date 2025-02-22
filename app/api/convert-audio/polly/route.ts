@@ -151,25 +151,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing text" }, { status: 400 });
     }
 
-    // Check rate limits
-    const usageCheck = await PollyUsageTracker.checkUsageLimits(
-      user.id,
-      text.length
-    );
-    if (!usageCheck.withinLimits) {
-      await captureServerEvent("tts_conversion_error", user, {
-        error: "Character limit exceeded",
-        dailyUsage: usageCheck.dailyUsage,
-        monthlyUsage: usageCheck.monthlyUsage,
-        yearlyUsage: usageCheck.yearlyUsage,
-      });
-      return NextResponse.json(
-        {
-          error: "Usage limit exceeded",
-          usageStats: usageCheck,
-        },
-        { status: 429 }
+    // Check rate limits for non-custom credential users
+    if (!hasCustomCreds) {
+      const usageCheck = await PollyUsageTracker.checkUsageLimits(
+        user.id,
+        text.length
       );
+      
+      if (!usageCheck.allowed) {
+        await captureServerEvent("tts_conversion_error", user, {
+          error: "Character limit exceeded",
+          currentUsage: usageCheck.currentUsage,
+          remainingCharacters: usageCheck.remainingCharacters,
+          monthlyLimit: usageCheck.monthlyLimit
+        });
+        return NextResponse.json(
+          {
+            error: "Monthly character limit exceeded",
+            usageStats: usageCheck,
+          },
+          { status: 429 }
+        );
+      }
     }
 
     // Validate voice ID
@@ -283,8 +286,10 @@ export async function POST(request: NextRequest) {
       throw new Error(`Database error: ${dbError.message}`);
     }
 
-    // Record usage
-    await PollyUsageTracker.recordUsage(user.id, text.length, selectedVoice);
+    // Record usage for non-custom credential users
+    if (!hasCustomCreds) {
+      await PollyUsageTracker.recordUsage(user.id, text.length, selectedVoice);
+    }
 
     // Log success
     await captureServerEvent("tts_conversion_completed", user, {
