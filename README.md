@@ -5,8 +5,9 @@ AudioScribe is a **PDF to Audio Converter** that transforms PDFs into high-quali
 
 ## Features
 - **PDF to Audio Conversion**: Upload a PDF and convert it to speech.
-- **Multiple TTS Services**: Currently supports Amazon Polly, ElevenLabs (priority) and with planned integration for Google TTS.
+- **Multiple TTS Services**: Supports Amazon Polly and ElevenLabs, with planned integration for Google TTS.
 - **File Upload with Supabase**: Securely upload and process files using Supabase.
+- **Voice Selection**: Choose from a variety of voices across different TTS providers.
 - **Future Audiobook Library**: Organize and store converted audio for easy access.
 
 ## Tech Stack
@@ -15,7 +16,7 @@ AudioScribe is a **PDF to Audio Converter** that transforms PDFs into high-quali
 - **Framer Motion** (Animations)
 - **Lucide-react** (Icons)
 - **tsparticles** (Background Particles)
-- **AWS Polly (Live), ElevenLabs (in progress), Google TTS (Planned)** (Text-to-Speech APIs)
+- **AWS Polly & ElevenLabs (Live), Google TTS (Planned)** (Text-to-Speech APIs)
 - **Supabase** (backend)
 - **Vercel** (deployment)
 - **PostHog** (Analytics)
@@ -45,15 +46,17 @@ AudioScribe is a **PDF to Audio Converter** that transforms PDFs into high-quali
 3. Download the generated audio file.
 
 ## Roadmap
-- [ ] **AWS Polly Usage Tracking**: Implement monitoring to prevent excessive API costs.
-- [ ] **ElevenLabs Integration**: Add support for ElevenLabs TTS as a priority.
+- [x] **AWS Polly Usage Tracking**: Implement monitoring to prevent excessive API costs.
+- [x] **ElevenLabs Integration**: Add support for ElevenLabs TTS.
 - [ ] **Google TTS Integration**: Implement Google TTS as an additional voice option.
 - [ ] **Audiobook Library Management**: Enable organization and storage of converted audio.
 - [ ] **Cross-Device Syncing**: Ensure seamless playback across multiple devices.
 - [ ] **Mobile Usability Optimization**: Improve UI/UX for mobile users.
 
 ## TODO
-- Configure **AWS Polly tracking** to monitor API usage.
+- Implement **Google TTS integration**
+- Enhance mobile responsiveness
+- Add audiobook library features
 
 ## License
 This project is licensed under the MIT License.

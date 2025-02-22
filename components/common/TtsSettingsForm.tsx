@@ -1,42 +1,51 @@
-'use client';
+"use client";
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock, Star, Mic2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Voice {
   voice_id: string;
   name: string;
   preview_url?: string;
   category?: string;
+  id?: string;
+  gender?: string;
+  isFree?: boolean;
+  isNeural?: boolean;
 }
 
 export default function TtsSettingsForm() {
   const [settings, setSettings] = useState({
     tts_service: "Amazon",
     api_key: "",
-    aws_polly_voice: process.env.NEXT_PUBLIC_AWS_POLLY_VOICE || "Joanna",
+    aws_polly_voice: "",
     elevenlabs_voice_id: "",
     elevenlabs_stability: 0.5,
     elevenlabs_similarity_boost: 0.75,
-    custom_voice_id: "", // New field for custom voice ID
+    custom_voice_id: "",
   });
-  const [voices, setVoices] = useState<Record<string, any[]>>({});
+
+  const [voices, setVoices] = useState<Record<string, Voice[]>>({});
   const [elevenLabsVoices, setElevenLabsVoices] = useState<Voice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  const [hasCustomCredentials, setHasCustomCredentials] = useState(false);
   const { toast } = useToast();
   const supabase = createClient();
 
@@ -54,17 +63,17 @@ export default function TtsSettingsForm() {
 
   async function fetchElevenLabsVoices() {
     if (!settings.api_key) return;
-    
+
     setIsLoadingVoices(true);
     try {
-      const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+      const response = await fetch("https://api.elevenlabs.io/v1/voices", {
         headers: {
-          'Accept': 'application/json',
-          'xi-api-key': settings.api_key
-        }
+          Accept: "application/json",
+          "xi-api-key": settings.api_key,
+        },
       });
 
-      if (!response.ok) throw new Error('Failed to fetch voices');
+      if (!response.ok) throw new Error("Failed to fetch voices");
 
       const data = await response.json();
       setElevenLabsVoices(data.voices);
@@ -72,7 +81,7 @@ export default function TtsSettingsForm() {
       toast({
         variant: "destructive",
         title: "Error loading ElevenLabs voices",
-        description: "Please check your API key and try again"
+        description: "Please check your API key and try again",
       });
     } finally {
       setIsLoadingVoices(false);
@@ -80,33 +89,47 @@ export default function TtsSettingsForm() {
   }
 
   async function fetchPollyVoices() {
+    setIsLoadingVoices(true);
     try {
       const response = await fetch("/api/voices/polly");
       if (!response.ok) throw new Error();
-      const data = await response.json();
-      setVoices(data);
+      const {
+        voices,
+        hasCustomCredentials: hasCreds,
+        defaultVoice,
+      } = await response.json();
+      setVoices(voices);
+      setHasCustomCredentials(hasCreds);
+
+      if (!settings.aws_polly_voice) {
+        setSettings((prev) => ({ ...prev, aws_polly_voice: defaultVoice }));
+      }
     } catch {
       toast({
         variant: "destructive",
         title: "Error loading Polly voices",
       });
+    } finally {
+      setIsLoadingVoices(false);
     }
   }
 
   async function fetchSettings() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data } = await supabase
         .from("user_tts_settings")
-        .select('*')
+        .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
       if (data) {
         setSettings(data);
-        if (data.tts_service === 'ElevenLabs' && data.api_key) {
+        if (data.tts_service === "ElevenLabs" && data.api_key) {
           fetchElevenLabsVoices();
         }
       } else {
@@ -115,7 +138,8 @@ export default function TtsSettingsForm() {
           .insert({
             id: user.id,
             tts_service: "Amazon",
-            aws_polly_voice: process.env.NEXT_PUBLIC_AWS_POLLY_VOICE || "Joanna",
+            aws_polly_voice:
+              process.env.NEXT_PUBLIC_AWS_POLLY_VOICE || "Joanna",
           });
 
         if (insertError) throw insertError;
@@ -145,18 +169,22 @@ export default function TtsSettingsForm() {
     setIsSaving(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error();
 
-      // Determine which voice ID to save
-      const voiceIdToSave = settings.tts_service === "ElevenLabs" 
-        ? (settings.custom_voice_id || settings.elevenlabs_voice_id)
-        : settings.aws_polly_voice;
+      const voiceIdToSave =
+        settings.tts_service === "ElevenLabs"
+          ? settings.custom_voice_id || settings.elevenlabs_voice_id
+          : settings.aws_polly_voice;
 
       const { error } = await supabase.from("user_tts_settings").upsert({
         id: user.id,
         ...settings,
-        [settings.tts_service === "ElevenLabs" ? "elevenlabs_voice_id" : "aws_polly_voice"]: voiceIdToSave,
+        [settings.tts_service === "ElevenLabs"
+          ? "elevenlabs_voice_id"
+          : "aws_polly_voice"]: voiceIdToSave,
         updated_at: new Date().toISOString(),
       });
 
@@ -201,6 +229,15 @@ export default function TtsSettingsForm() {
         </Select>
       </div>
 
+      {settings.tts_service === "Amazon" && !hasCustomCredentials && (
+        <Alert>
+          <AlertDescription>
+            Using default AWS credentials. Only free voices are available. Add
+            your own AWS credentials to access all voices.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="space-y-2">
         <Label>
           {settings.tts_service === "Amazon"
@@ -214,7 +251,7 @@ export default function TtsSettingsForm() {
           type="password"
           placeholder={
             settings.tts_service === "Amazon"
-              ? "Leave empty to use Amazon Polly included with your account"
+              ? "Leave empty to use free voices only"
               : `Enter your ${settings.tts_service} API key`
           }
           value={settings.api_key}
@@ -224,6 +261,70 @@ export default function TtsSettingsForm() {
           required={settings.tts_service !== "Amazon"}
         />
       </div>
+
+      {settings.tts_service === "Amazon" && (
+        <div className="space-y-2">
+          <Label>AWS Polly Voice</Label>
+          <Select
+            value={settings.aws_polly_voice}
+            onValueChange={(value) =>
+              setSettings((prev) => ({ ...prev, aws_polly_voice: value }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue
+                placeholder={
+                  isLoadingVoices ? "Loading voices..." : "Select a voice"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent className="max-h-[300px]">
+              {Object.entries(voices).map(([language, languageVoices]) => (
+                <SelectGroup key={language}>
+                  <SelectLabel className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
+                    {language}
+                  </SelectLabel>
+                  {languageVoices.map((voice) => (
+                    <SelectItem
+                      key={voice.id || voice.voice_id}
+                      value={voice.id || voice.voice_id}
+                      disabled={!hasCustomCredentials && !voice.isFree}
+                      className="relative"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {voice.name} {voice.gender && `(${voice.gender})`}
+                        </span>
+                        {voice.isNeural && (
+                          <span title="Neural Engine">
+                            <Mic2 className="h-4 w-4 text-blue-500" />
+                          </span>
+                        )}
+                        {voice.isFree && (
+                          <span title="Free Voice">
+                          <Star
+                            className="h-4 w-4 text-yellow-500"
+                          />
+                          </span>
+                        )}
+                        {!voice.isFree && (
+                          
+                          <span title="Premium Voice">
+                            <Lock
+                            className="h-4 w-4 text-gray-500"
+                            
+                          />
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {settings.tts_service === "ElevenLabs" && (
         <div className="space-y-4">
@@ -238,16 +339,20 @@ export default function TtsSettingsForm() {
                 <Select
                   value={settings.elevenlabs_voice_id}
                   onValueChange={(value) =>
-                    setSettings((prev) => ({ 
-                      ...prev, 
+                    setSettings((prev) => ({
+                      ...prev,
                       elevenlabs_voice_id: value,
-                      custom_voice_id: "" // Clear custom voice ID when selecting from list
+                      custom_voice_id: "",
                     }))
                   }
                   disabled={isLoadingVoices || !settings.api_key}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={isLoadingVoices ? "Loading voices..." : "Select a voice"} />
+                    <SelectValue
+                      placeholder={
+                        isLoadingVoices ? "Loading voices..." : "Select a voice"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {elevenLabsVoices.map((voice) => (
@@ -267,10 +372,10 @@ export default function TtsSettingsForm() {
                   placeholder="Enter custom voice ID"
                   value={settings.custom_voice_id}
                   onChange={(e) =>
-                    setSettings((prev) => ({ 
-                      ...prev, 
+                    setSettings((prev) => ({
+                      ...prev,
                       custom_voice_id: e.target.value,
-                      elevenlabs_voice_id: "" // Clear selected voice when entering custom ID
+                      elevenlabs_voice_id: "",
                     }))
                   }
                 />
@@ -290,14 +395,16 @@ export default function TtsSettingsForm() {
                 onChange={(e) =>
                   setSettings((prev) => ({
                     ...prev,
-                    elevenlabs_stability: parseFloat(e.target.value)
+                    elevenlabs_stability: parseFloat(e.target.value),
                   }))
                 }
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Similarity Boost ({settings.elevenlabs_similarity_boost})</Label>
+              <Label>
+                Similarity Boost ({settings.elevenlabs_similarity_boost})
+              </Label>
               <Input
                 type="range"
                 min="0"
@@ -307,42 +414,12 @@ export default function TtsSettingsForm() {
                 onChange={(e) =>
                   setSettings((prev) => ({
                     ...prev,
-                    elevenlabs_similarity_boost: parseFloat(e.target.value)
+                    elevenlabs_similarity_boost: parseFloat(e.target.value),
                   }))
                 }
               />
             </div>
           </div>
-        </div>
-      )}
-
-      {settings.tts_service === "Amazon" && (
-        <div className="space-y-2">
-          <Label>AWS Polly Voice</Label>
-          <Select
-            value={settings.aws_polly_voice}
-            onValueChange={(value) =>
-              setSettings((prev) => ({ ...prev, aws_polly_voice: value }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a voice" />
-            </SelectTrigger>
-            <SelectContent className="max-h-[300px]">
-              {Object.entries(voices).map(([language, languageVoices]) => (
-                <div key={language}>
-                  <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
-                    {language}
-                  </div>
-                  {languageVoices.map((voice: any) => (
-                    <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name} ({voice.gender})
-                    </SelectItem>
-                  ))}
-                </div>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       )}
 

@@ -1,24 +1,49 @@
+// app/api/tts/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { captureServerEvent } from "@/utils/posthog-server";
-import { PollyUsageTracker } from '@/utils/polly-usage-tracker';
+import { PollyUsageTracker } from "@/utils/polly-usage-tracker";
 import {
   PollyClient,
   SynthesizeSpeechCommand,
   VoiceId,
   SynthesizeSpeechCommandInput,
   Engine,
-  DescribeVoicesCommand
+  DescribeVoicesCommand,
 } from "@aws-sdk/client-polly";
 import { Readable } from "stream";
 
-const pollyClient = new PollyClient({
-  region: process.env.AWS_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+// Define free voices
+const FREE_VOICES = [
+  'Joanna',
+  'Matthew',
+  'Salli',
+  'Justin',
+  'Joey',
+  'Kendra',
+  'Kimberly',
+  'Kevin'
+] as const;
+
+type FreeVoiceId = typeof FREE_VOICES[number];
+
+// Rate limit configuration
+const RATE_LIMIT = {
+  maxRequests: 100,    // requests
+  windowMs: 60 * 1000, // per minute
+  endpoint: '/api/tts'
+};
+
+// Initialize the Polly client with default credentials
+const getPollyClient = (credentials?: { accessKeyId: string; secretAccessKey: string }) => {
+  return new PollyClient({
+    region: process.env.AWS_REGION || "us-east-1",
+    credentials: credentials || {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  });
+};
 
 const chunkText = (text: string, maxLength: number = 2900): string[] => {
   if (text.length <= maxLength) return [text];
@@ -64,83 +89,120 @@ const chunkText = (text: string, maxLength: number = 2900): string[] => {
   return chunks;
 };
 
-async function getVoiceEngineSupport(voiceId: string): Promise<Engine[]> {
+async function getVoiceEngineSupport(voiceId: string, client: PollyClient): Promise<Engine[]> {
   const command = new DescribeVoicesCommand({
     IncludeAdditionalLanguageCodes: true,
   });
-  
-  const response = await pollyClient.send(command);
-  const voice = response.Voices?.find(v => v.Id === voiceId);
-  
-  return voice?.SupportedEngines || ['standard'];
+
+  const response = await client.send(command);
+  const voice = response.Voices?.find((v) => v.Id === voiceId);
+
+  return voice?.SupportedEngines || ["standard"];
 }
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   try {
     if (!user) {
-      await captureServerEvent('tts_conversion_unauthorized', user, {
-        error: 'User not authenticated'
+      await captureServerEvent("tts_conversion_unauthorized", null, {
+        error: "User not authenticated",
       });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Get user settings and check for custom credentials
     const { data: settings } = await supabase
-      .from('user_tts_settings')
-      .select('aws_polly_voice')
-      .eq('id', user.id)
+      .from("user_tts_settings")
+      .select("aws_polly_voice, api_key, tts_service")
+      .eq("id", user.id)
       .maybeSingle();
 
     const { text, voiceId, originalFilename } = await request.json();
-    const selectedVoice = voiceId || settings?.aws_polly_voice || 'Joanna';
+    const selectedVoice = voiceId || settings?.aws_polly_voice || "Joanna";
+    const hasCustomCreds = Boolean(settings?.api_key);
 
-    // Add usage limit check
-    const usageCheck = await PollyUsageTracker.checkUsageLimits(user.id, text.length);
-    if (!usageCheck.withinLimits) {
-      await captureServerEvent('tts_conversion_error', user, {
-        error: 'Character limit exceeded',
-        dailyUsage: usageCheck.dailyUsage,
-        monthlyUsage: usageCheck.monthlyUsage,
-        yearlyUsage: usageCheck.yearlyUsage
+    // Check if free voice
+    const isFreeVoice = FREE_VOICES.includes(selectedVoice as FreeVoiceId);
+    if (!hasCustomCreds && !isFreeVoice) {
+      await captureServerEvent("tts_conversion_error", user, {
+        error: "Premium voice not available",
+        voiceId: selectedVoice,
       });
-      return NextResponse.json({ 
-        error: 'Monthly/Daily/Yearly character limit exceeded',
-        usageStats: usageCheck
-      }, { status: 429 }); // Too Many Requests
-    }
-   
-    await captureServerEvent('tts_conversion_started', user, {
-      textLength: text?.length,
-      voiceId: selectedVoice,
-      hasOriginalFilename: !!originalFilename
-    });
-
-    if (!text) {
-      await captureServerEvent('tts_conversion_error', user, {
-        error: 'Missing text',
-        voiceId: selectedVoice
-      });
-      return NextResponse.json({ error: 'Missing text' }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "This voice requires custom AWS credentials. Please use a free voice or provide your own AWS credentials.",
+          voiceId: selectedVoice,
+          availableVoices: FREE_VOICES,
+        },
+        { status: 403 }
+      );
     }
 
+    // Validate input
+    if (!text?.trim()) {
+      await captureServerEvent("tts_conversion_error", user, {
+        error: "Missing text",
+        voiceId: selectedVoice,
+      });
+      return NextResponse.json({ error: "Missing text" }, { status: 400 });
+    }
+
+    // Check rate limits for non-custom credential users
+    if (!hasCustomCreds) {
+      const usageCheck = await PollyUsageTracker.checkUsageLimits(
+        user.id,
+        text.length
+      );
+      
+      if (!usageCheck.allowed) {
+        await captureServerEvent("tts_conversion_error", user, {
+          error: "Character limit exceeded",
+          currentUsage: usageCheck.currentUsage,
+          remainingCharacters: usageCheck.remainingCharacters,
+          monthlyLimit: usageCheck.monthlyLimit
+        });
+        return NextResponse.json(
+          {
+            error: "Monthly character limit exceeded",
+            usageStats: usageCheck,
+          },
+          { status: 429 }
+        );
+      }
+    }
+
+    // Validate voice ID
     if (!Object.values(VoiceId).includes(selectedVoice as VoiceId)) {
-      await captureServerEvent('tts_conversion_error', user, {
-        error: 'Invalid voice ID',
-        voiceId: selectedVoice
+      await captureServerEvent("tts_conversion_error", user, {
+        error: "Invalid voice ID",
+        voiceId: selectedVoice,
       });
-      return NextResponse.json({ 
-        error: `Invalid voice ID. Please use a valid Amazon Polly voice ID.`
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Invalid voice ID. Please use a valid Amazon Polly voice ID.",
+          availableVoices: FREE_VOICES,
+        },
+        { status: 400 }
+      );
     }
 
-    // Get supported engines for the selected voice
-    const supportedEngines = await getVoiceEngineSupport(selectedVoice);
-    const engine = supportedEngines.includes('neural') ? 'neural' : 'standard';
+    // Initialize Polly client with appropriate credentials
+    const pollyClient = getPollyClient(
+      hasCustomCreds ? {
+        accessKeyId: settings!.api_key!,
+        secretAccessKey: "CUSTOM_SECRET", // You'd need to implement secure credential storage
+      } : undefined
+    );
 
-    console.log(`Making AWS Polly request with voiceId: ${selectedVoice}, engine: ${engine}`);
+    // Get supported engines
+    const supportedEngines = await getVoiceEngineSupport(selectedVoice, pollyClient);
+    const engine = supportedEngines.includes("neural") ? "neural" : "standard";
 
+    // Process text in chunks
     const textChunks = chunkText(text);
     const audioChunks: Buffer[] = [];
 
@@ -172,17 +234,19 @@ export async function POST(request: NextRequest) {
       audioChunks.push(Buffer.concat(chunkBuffers));
     }
 
+    // Combine audio chunks and prepare for storage
     const finalAudioBuffer = Buffer.concat(audioChunks);
     const timestamp = Date.now();
     const fileId = crypto.randomUUID();
-    
-    // Generate the audio filename based on the original file
-    const audioFilename = originalFilename 
-      ? `${originalFilename.replace(/\.[^/.]+$/, '')}_audio.mp3` // Remove original extension and add _audio.mp3
-      : `audio_${timestamp}_${fileId.slice(0, 8)}.mp3`; // Fallback to timestamp-based name
-    
+
+    // Generate filename
+    const audioFilename = originalFilename
+      ? `${originalFilename.replace(/\.[^/.]+$/, "")}_audio.mp3`
+      : `audio_${timestamp}_${fileId.slice(0, 8)}.mp3`;
+
     const fileName = `${user.id}/audio/${fileId}/${audioFilename}`;
 
+    // Upload to storage
     const { error: uploadError } = await supabase.storage
       .from("files")
       .upload(fileName, finalAudioBuffer, {
@@ -191,15 +255,15 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      await captureServerEvent('tts_conversion_error', user, {
+      await captureServerEvent("tts_conversion_error", user, {
         error: `Upload error: ${uploadError.message}`,
         voiceId: selectedVoice,
-        stage: 'upload'
+        stage: "upload",
       });
-      console.error("Upload error:", uploadError);
       throw new Error(`Audio upload error: ${uploadError.message}`);
     }
 
+    // Record in database
     const { data: fileRecord, error: dbError } = await supabase
       .from("files")
       .insert({
@@ -214,44 +278,52 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (dbError) {
-      await captureServerEvent('tts_conversion_error', user, {
+      await captureServerEvent("tts_conversion_error", user, {
         error: `Database error: ${dbError.message}`,
         voiceId: selectedVoice,
-        stage: 'database'
+        stage: "database",
       });
       throw new Error(`Database error: ${dbError.message}`);
     }
 
-    // Record usage after successful synthesis
-    await PollyUsageTracker.recordUsage(
-      user.id, 
-      text.length, 
-      selectedVoice
-    );
+    // Record usage for non-custom credential users
+    if (!hasCustomCreds) {
+      await PollyUsageTracker.recordUsage(user.id, text.length, selectedVoice);
+    }
 
-    await captureServerEvent('tts_conversion_completed', user, {
+    // Log success
+    await captureServerEvent("tts_conversion_completed", user, {
       fileId: fileRecord.id,
       textLength: text.length,
       voiceId: selectedVoice,
       chunks: textChunks.length,
-      engine: engine
+      engine: engine,
+      usingCustomCredentials: hasCustomCreds,
+      isFreeVoice
     });
 
     return NextResponse.json({
       success: true,
       fileId: fileRecord.id,
+      voiceUsed: selectedVoice,
+      engine,
+      charCount: text.length,
     });
+
   } catch (error) {
     console.error("[Audio Conversion Error]:", error);
-    
+
     const errorMessage = error instanceof Error ? error.message : "Conversion failed";
-    await captureServerEvent('tts_conversion_error', user, {
+    await captureServerEvent("tts_conversion_error", user, {
       error: errorMessage,
-      stage: 'unknown'
+      stage: "unknown",
     });
 
     return NextResponse.json(
-      { error: errorMessage },
+      { 
+        error: errorMessage,
+        message: "Failed to convert text to speech. Please try again."
+      }, 
       { status: 500 }
     );
   }
