@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
       
       if (!usageCheck.allowed) {
         await captureServerEvent("tts_conversion_error", user, {
-          error: "Character limit exceeded",
+          error: "Monthly character limit exceeded",
           currentUsage: usageCheck.currentUsage,
           remainingCharacters: usageCheck.remainingCharacters,
           monthlyLimit: usageCheck.monthlyLimit
@@ -168,7 +168,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: "Monthly character limit exceeded",
-            usageStats: usageCheck,
+            usageStats: {
+              currentUsage: usageCheck.currentUsage,
+              remainingCharacters: usageCheck.remainingCharacters,
+              monthlyLimit: usageCheck.monthlyLimit
+            },
+            message: `You have reached your monthly limit of ${usageCheck.monthlyLimit.toLocaleString()} characters. This text would require ${text.length.toLocaleString()} characters. Please upgrade to continue using the service.`
           },
           { status: 429 }
         );

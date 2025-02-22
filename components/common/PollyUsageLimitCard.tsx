@@ -2,23 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { createClient } from '@/utils/supabase/client';
-import { Loader2 } from 'lucide-react';
-import { User } from '@supabase/supabase-js';
-
-const MONTHLY_CHARACTER_LIMIT = 100000; // Adjust this value as needed
-
-interface PollyUsageRecord {
-  characters_synthesized: number;
-}
-
-interface UserSettings {
-  api_key: string | null;
-}
+import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { PollyUsageClient, UsageLimits } from '@/utils/polly-usage-client';
+import { cn } from '@/lib/utils';
 
 export const PollyUsageLimitCard = () => {
-  const [currentUsage, setCurrentUsage] = useState(0);
+  const [usageStats, setUsageStats] = useState<UsageLimits | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasCustomCredentials, setHasCustomCredentials] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,44 +21,25 @@ export const PollyUsageLimitCard = () => {
       try {
         setIsLoading(true);
         
-        // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         
         if (userError) throw userError;
         if (!user) throw new Error('No authenticated user');
         
-        // Get current month's usage in UTC
-        const now = new Date();
-        const startOfMonth = new Date(Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          1,
-          0, 0, 0, 0
-        ));
-        
-        // Fetch usage data
-        const { data: usageData, error: usageError } = await supabase
-          .from('polly_usage')
-          .select('characters_synthesized')
-          .eq('user_id', user.id)
-          .gte('synthesis_date', startOfMonth.toISOString())
-          .lt('synthesis_date', now.toISOString());
-          
-        if (usageError) throw usageError;
-        
-        // Check if user has custom credentials
         const { data: settingsData, error: settingsError } = await supabase
           .from('user_tts_settings')
           .select('api_key')
           .single();
           
-        if (settingsError) throw settingsError;
+        if (settingsError && settingsError.code !== 'PGRST116') {
+          throw settingsError;
+        }
+
+        if (!settingsData?.api_key) {
+          const stats = await PollyUsageClient.checkUsageLimits(user.id);
+          setUsageStats(stats);
+        }
         
-        // Calculate total usage
-        const totalUsage = (usageData || []).reduce((sum, record: PollyUsageRecord) => 
-          sum + (record.characters_synthesized || 0), 0);
-          
-        setCurrentUsage(totalUsage);
         setHasCustomCredentials(!!settingsData?.api_key);
         
       } catch (err) {
@@ -107,22 +79,34 @@ export const PollyUsageLimitCard = () => {
         </CardHeader>
         <CardContent>
           <Alert>
+            <CheckCircle2 className="h-4 w-4" />
             <AlertDescription>
               Using custom AWS credentials - no character limit applies
             </AlertDescription>
           </Alert>
-          <div className="mt-4">
-            <p className="text-sm text-muted-foreground">
-              Characters synthesized this month: {currentUsage.toLocaleString()}
-            </p>
-          </div>
+          {usageStats && (
+            <div className="mt-4">
+              <p className="text-sm text-muted-foreground">
+                Characters synthesized this month: {usageStats.currentUsage.toLocaleString()}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     );
   }
+
+  if (!usageStats) {
+    return (
+      <Alert>
+        <AlertDescription>No usage data available</AlertDescription>
+      </Alert>
+    );
+  }
   
-  const usagePercentage = (currentUsage / MONTHLY_CHARACTER_LIMIT) * 100;
-  const remainingCharacters = Math.max(0, MONTHLY_CHARACTER_LIMIT - currentUsage);
+  const usagePercentage = Math.min(100, (usageStats.currentUsage / usageStats.monthlyLimit) * 100);
+  const isApproachingLimit = usagePercentage >= 80 && usagePercentage < 100;
+  const isOverLimit = usageStats.currentUsage >= usageStats.monthlyLimit;
   
   return (
     <Card>
@@ -131,22 +115,57 @@ export const PollyUsageLimitCard = () => {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <Progress value={usagePercentage} />
+          <div className="relative w-full">
+            <Progress 
+              value={usagePercentage} 
+              className={cn(
+                "h-2",
+                isOverLimit ? "bg-destructive/20" : isApproachingLimit ? "bg-yellow-200" : ""
+              )}
+            />
+            {isOverLimit && (
+              <div className="absolute inset-0 bg-destructive" style={{ width: '100%' }} />
+            )}
+            {isApproachingLimit && (
+              <div className="absolute inset-0 bg-yellow-500/50" style={{ width: `${usagePercentage}%` }} />
+            )}
+          </div>
+          
           <div className="flex justify-between text-sm">
-            <span>
-              Used: {currentUsage.toLocaleString()} characters
+            <span className={cn(isOverLimit && "text-destructive font-medium")}>
+              Used: {usageStats.currentUsage.toLocaleString()} characters
+              {isOverLimit && ` (${(usagePercentage).toFixed(1)}% of limit)`}
             </span>
             <span className="text-muted-foreground">
-              Limit: {MONTHLY_CHARACTER_LIMIT.toLocaleString()} characters
+              Limit: {usageStats.monthlyLimit.toLocaleString()} characters
             </span>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {remainingCharacters.toLocaleString()} characters remaining this month
-          </p>
-          {remainingCharacters === 0 && (
-            <Alert variant="destructive">
+          
+          {!isOverLimit && (
+            <p className="text-sm text-muted-foreground">
+              {usageStats.remainingCharacters.toLocaleString()} characters remaining this month
+            </p>
+          )}
+
+          {isOverLimit && (
+            <Alert variant="destructive" className="border-destructive/50">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Usage Limit Exceeded</AlertTitle>
               <AlertDescription>
-                Monthly character limit reached. Add custom AWS credentials to continue using Polly.
+                You have exceeded your monthly limit of {usageStats.monthlyLimit.toLocaleString()} characters by{' '}
+                {(usageStats.currentUsage - usageStats.monthlyLimit).toLocaleString()} characters. 
+                To continue using the service, please add custom AWS credentials.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {isApproachingLimit && (
+            <Alert variant="destructive" className="bg-yellow-50 border-yellow-500 text-yellow-900">
+              <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              <AlertTitle>Approaching Limit</AlertTitle>
+              <AlertDescription>
+                You are approaching your monthly limit. You have {usageStats.remainingCharacters.toLocaleString()} characters remaining. 
+                Consider adding custom AWS credentials to avoid service interruption.
               </AlertDescription>
             </Alert>
           )}
