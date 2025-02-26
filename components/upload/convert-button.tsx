@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Headphones, Loader2 } from "lucide-react";
+import { Headphones, Loader2, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ConvertButtonProps {
   text: string;
@@ -27,6 +30,8 @@ interface TTSSettings {
 export function ConvertButton(props: ConvertButtonProps) {
   const [converting, setConverting] = useState(false);
   const [settings, setSettings] = useState<TTSSettings | null>(null);
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
+  const [hasRateLimitError, setHasRateLimitError] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -74,6 +79,11 @@ export function ConvertButton(props: ConvertButtonProps) {
     e.stopPropagation();
     
     if (!settings) return;
+    
+    if (hasRateLimitError && settings.tts_service === 'Amazon' && !settings.api_key) {
+      setShowLimitDialog(true);
+      return;
+    }
 
     try {
       setConverting(true);
@@ -109,7 +119,8 @@ export function ConvertButton(props: ConvertButtonProps) {
         if (response.status === 401) {
           throw new Error('Authentication required. Please check your API key.');
         } else if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again later.');
+          setHasRateLimitError(true);
+          throw new Error('Usage limit exceeded. Please add custom AWS credentials or try again next month.');
         }
         
         throw new Error(errorData.error || 'Conversion failed');
@@ -132,32 +143,32 @@ export function ConvertButton(props: ConvertButtonProps) {
       console.error("Conversion error:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to convert to audio";
       props.onError(errorMessage);
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      
+      if (errorMessage.includes('Usage limit exceeded')) {
+        setShowLimitDialog(true);
+      } else {
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       setConverting(false);
     }
   };
 
   const getButtonTitle = () => {
+    if (hasRateLimitError && settings?.tts_service === 'Amazon' && !settings?.api_key) {
+      return "Usage limit exceeded";
+    }
     if (!settings) return "Loading settings...";
     if (converting) return "Converting...";
     return `Convert to Audio using ${settings.tts_service}`;
   };
 
-  return (
-    <Button
-      onClick={handleConvert}
-      disabled={props.disabled || converting || !settings}
-      variant={props.iconOnly ? "ghost" : "secondary"}
-      size={props.iconOnly ? "icon" : "sm"}
-      className={!props.iconOnly ? "ml-2" : ""}
-      type="button"
-      title={props.iconOnly ? getButtonTitle() : undefined}
-    >
+  const ButtonContent = () => (
+    <>
       {converting ? (
         <Loader2 
           size={16} 
@@ -169,7 +180,117 @@ export function ConvertButton(props: ConvertButtonProps) {
           className={props.iconOnly ? "" : "mr-2"}
         />
       )}
-      {!props.iconOnly && (converting ? "Converting..." : "Convert to Audio")}
-    </Button>
+      {!props.iconOnly && (
+        hasRateLimitError && settings?.tts_service === 'Amazon' && !settings?.api_key 
+          ? "Usage Limit Exceeded" 
+          : converting 
+            ? "Converting..." 
+            : "Convert to Audio"
+      )}
+    </>
+  );
+
+  // If in icon-only mode, wrap with tooltip
+  if (props.iconOnly) {
+    return (
+      <>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleConvert}
+                disabled={props.disabled || converting || !settings}
+                variant="ghost"
+                size="icon"
+                type="button"
+                title={getButtonTitle()}
+              >
+                <ButtonContent />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {hasRateLimitError && settings?.tts_service === 'Amazon' && !settings?.api_key
+                ? "Usage limit exceeded"
+                : getButtonTitle()}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <LimitExceededDialog 
+          open={showLimitDialog} 
+          onOpenChange={setShowLimitDialog} 
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Button
+        onClick={handleConvert}
+        disabled={props.disabled || converting || !settings}
+        variant="secondary"
+        size="sm"
+        className="ml-2"
+        type="button"
+      >
+        <ButtonContent />
+      </Button>
+
+      <LimitExceededDialog 
+        open={showLimitDialog} 
+        onOpenChange={setShowLimitDialog} 
+      />
+    </>
+  );
+}
+
+// Component for the limit exceeded dialog
+function LimitExceededDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const router = useRouter();
+  
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Usage Limit Exceeded</DialogTitle>
+          <DialogDescription>
+            You have exceeded your monthly character limit for text-to-speech conversions.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <Alert variant="destructive" className="mt-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Cannot Convert Text to Audio</AlertTitle>
+          <AlertDescription>
+            To continue using the text-to-speech feature, please add custom AWS credentials
+            or wait until your usage resets next month.
+          </AlertDescription>
+        </Alert>
+        
+        <div className="mt-4">
+          <p className="text-sm text-muted-foreground">
+            You can add your own AWS credentials in the account settings to
+            bypass this limitation and use your own AWS Polly quota.
+          </p>
+        </div>
+        
+        <div className="flex justify-end mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button 
+            variant="default" 
+            className="ml-2"
+            onClick={() => {
+              onOpenChange(false);
+              router.push("/protected");
+            }}
+          >
+            Go to Settings
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
