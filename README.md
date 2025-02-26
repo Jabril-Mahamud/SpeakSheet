@@ -1,7 +1,7 @@
 # SpeakSheet
 
 ## Overview
-SpeakSheet is a **PDF to Audio Converter** that transforms PDFs into high-quality speech using AI-driven text-to-speech (TTS) services. Users can upload files, select from multiple voice options, and generate natural-sounding audio files. Future updates will include audiobook organization and cross-device syncing.
+SpeakSheet is a **PDF to Audio Converter** that transforms PDFs into high-quality speech using AI-driven text-to-speech (TTS) services. Users can upload files or simply type in the chat page, select from multiple voice options, and generate natural-sounding audio files. Future updates will include audiobook organization and cross-device syncing.
 
 ## Features
 - **PDF to Audio Conversion**: Upload a PDF and convert it to speech.
