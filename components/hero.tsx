@@ -3,26 +3,30 @@
 import { useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
 import { useTheme } from "next-themes"
-import { ArrowRight, Files, Volume2, BookOpen, Sparkles } from "lucide-react"
+import { ArrowRight, FileText, MessageSquare, Volume2, Sparkles } from "lucide-react"
 import Particles from "react-tsparticles"
 import { loadSlim } from "tsparticles-slim"
 import type { Engine } from "tsparticles-engine"
+import Link from "next/link"
 
 const features = [
   { 
     name: "PDF to Audio", 
-    icon: Files, 
-    description: "Convert any PDF into natural speech" 
+    icon: FileText, 
+    description: "Convert PDFs into natural speech", 
+    link: "/files"
   },
   { 
-    name: "Multiple Voices", 
+    name: "Simple Text Conversion", 
+    icon: MessageSquare, 
+    description: "Type text and hear it instantly", 
+    link: "/chat"
+  },
+  { 
+    name: "Multiple Voice Options", 
     icon: Volume2, 
-    description: "Choose from various AI voices" 
-  },
-  { 
-    name: "Future Audiobooks", 
-    icon: BookOpen, 
-    description: "Your personal audiobook library" 
+    description: "Amazon Polly, ElevenLabs & more", 
+    link: "/files"
   }
 ]
 
@@ -116,13 +120,13 @@ export default function Hero() {
               >
                 <Sparkles className="mr-2 h-4 w-4" />
               </motion.div>
-              Transform PDFs into Natural Speech
+              Text to Speech Made Simple
             </motion.div>
 
             <motion.h1 
               className="text-4xl font-bold tracking-tighter sm:text-6xl md:text-7xl mb-8"
             >
-              <span className="text-foreground">Turn Your PDFs Into</span>
+              <span className="text-foreground">AudioScribe:</span>
               <br />
               <motion.span
                 animate={{
@@ -134,13 +138,13 @@ export default function Hero() {
                   ease: "easeInOut",
                 }}
               >
-                Audio Experiences
+                Words to Voice
               </motion.span>
             </motion.h1>
 
             <p className="max-w-2xl mx-auto text-xl text-muted-foreground mb-12">
-              Convert PDFs to high-quality audio using multiple AI voice services. 
-              Your documents, brought to life with natural-sounding speech.
+              Convert PDFs to audio or type text for instant speech.
+              Multiple voice services, one seamless platform.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
@@ -150,16 +154,16 @@ export default function Hero() {
                 href="/files"
                 className="group inline-flex h-12 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-violet-500 hover:from-indigo-600 hover:via-cyan-600 hover:to-violet-600 px-8 text-base font-medium text-white shadow-lg transition-all duration-300 hover:shadow-xl"
               >
-                Convert Your First PDF
+                Convert PDF to Audio
                 <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </motion.a>
               <motion.a
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                href="#demo"
+                href="/chat"
                 className="inline-flex h-12 items-center justify-center rounded-full border px-8 text-base font-medium shadow-sm transition-colors hover:bg-muted"
               >
-                Watch Demo
+                Try Text Chat
               </motion.a>
             </div>
           </motion.div>
@@ -176,6 +180,9 @@ export default function Hero() {
                   transition={{ delay: 0.4 + index * 0.1 }}
                   className="group relative overflow-hidden rounded-2xl border bg-background/50 p-6 backdrop-blur-sm hover:shadow-lg transition-shadow"
                 >
+                  <Link href={feature.link} className="absolute inset-0 z-10">
+                    <span className="sr-only">Go to {feature.name}</span>
+                  </Link>
                   <div className="flex items-center gap-4">
                     <div className="rounded-full bg-primary/10 p-3">
                       <Icon className="h-6 w-6 text-primary" />

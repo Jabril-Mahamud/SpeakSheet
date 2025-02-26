@@ -12,9 +12,9 @@ const NameHoverCard = () => {
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
-        <Link href="/" className="font-semibold">
+        <Link href="/" className="font-bold">
           <motion.span
-            className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent"
+            className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent text-2xl"
             animate={{
               backgroundPosition: ["0%", "100%", "0%"],
             }}
