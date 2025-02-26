@@ -126,8 +126,6 @@ export default function Hero() {
             <motion.h1 
               className="text-4xl font-bold tracking-tighter sm:text-6xl md:text-7xl mb-8"
             >
-              <span className="text-foreground">SpeakSheet:</span>
-              <br />
               <motion.span
                 animate={{
                   color: ["#4F46E5", "#06b6d4", "#7C3AED", "#4F46E5"],
@@ -138,8 +136,10 @@ export default function Hero() {
                   ease: "easeInOut",
                 }}
               >
-                Words to Voice
+                SpeakSheet
               </motion.span>
+              <br />
+              <span className="text-foreground">Words to Voice</span>
             </motion.h1>
 
             <p className="max-w-2xl mx-auto text-xl text-muted-foreground mb-12">
