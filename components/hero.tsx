@@ -126,7 +126,7 @@ export default function Hero() {
             <motion.h1 
               className="text-4xl font-bold tracking-tighter sm:text-6xl md:text-7xl mb-8"
             >
-              <span className="text-foreground">AudioScribe:</span>
+              <span className="text-foreground">SpeakSheet:</span>
               <br />
               <motion.span
                 animate={{

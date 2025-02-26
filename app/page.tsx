@@ -105,7 +105,7 @@ export default function Home() {
             {/* How It Works Section */}
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl mb-4">
-                How AudioScribe Works
+                How SpeakSheet Works
               </h2>
               <p className="text-xl text-muted-foreground">
                 Convert your content to audio in just a few simple steps
@@ -171,7 +171,7 @@ export default function Home() {
                 Choose Your Perfect Voice
               </h2>
               <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto">
-                AudioScribe integrates with leading text-to-speech providers
+                SpeakSheet integrates with leading text-to-speech providers
               </p>
 
               <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
