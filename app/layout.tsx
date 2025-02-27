@@ -11,7 +11,7 @@ const defaultUrl = process.env.VERCEL_URL
 export const metadata = {
   metadataBase: new URL(defaultUrl),
   title: "SpeakSheet",
-  description: "The fastest way to create & manage Text to speech audio content",
+  description: "The best way to create & manage Text to speech audio content",
 };
 
 export default function RootLayout({
