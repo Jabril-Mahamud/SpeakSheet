@@ -136,7 +136,7 @@ export default function Hero() {
                   ease: "easeInOut",
                 }}
               >
-                SpeakSheet
+                SheetSpeak
               </motion.span>
               <br />
               <span className="text-foreground">Words to Voice</span>

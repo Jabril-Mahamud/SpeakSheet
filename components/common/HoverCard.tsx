@@ -27,7 +27,7 @@ const NameHoverCard = () => {
               backgroundSize: "300% 300%",
             }}
           >
-            SpeakSheet
+            SheetSpeak
           </motion.span>
         </Link>
       </HoverCardTrigger>
