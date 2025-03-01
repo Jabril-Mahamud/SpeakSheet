@@ -1,6 +1,9 @@
+// Combined TypeScript Interfaces and Types
+
 export type FileUploadProps = {
   children: React.ReactNode;
 };
+
 export type UploadFormProps = {
   onSubmit: (e: React.FormEvent) => Promise<void>;
   files: FileList | null;
@@ -8,13 +11,18 @@ export type UploadFormProps = {
   uploading: boolean;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 };
-export interface TtsSettings {
-  id: string;
-  tts_service: string;
+
+export interface TTSSettings {
+  id?: string;
+  tts_service: string | "Amazon" | "ElevenLabs";
+  default_service?: string;
   api_key?: string;
   aws_polly_voice?: string;
-  created_at: string;
-  updated_at: string;
+  elevenlabs_voice_id?: string;
+  elevenlabs_stability?: number;
+  elevenlabs_similarity_boost?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface FileRecord {
@@ -32,7 +40,7 @@ export interface UploadProgress {
 export interface FileProgressItemProps {
   file: File;
   progress?: UploadProgress;
-  showButtons: boolean; 
+  showButtons: boolean;
   isText: boolean;
   convertedText?: string;
   onUpdateProgress: (fileName: string, progress: number) => void;
@@ -40,6 +48,7 @@ export interface FileProgressItemProps {
   onConvertError: (error: string) => void;
   getStatusText: (status: UploadProgress["status"]) => string;
 }
+
 export interface FileProgressListProps {
   files: FileList;
   uploadProgress: Record<string, UploadProgress>;
@@ -56,7 +65,7 @@ export interface FileDialogProps {
     file_path: string;
     file_type: string;
     original_name: string;
-    created_at: string; 
+    created_at: string;
   } | null;
   mode?: 'upload' | 'view';
   open: boolean;
@@ -75,26 +84,6 @@ export interface ConvertButtonProps {
   iconOnly?: boolean;
 }
 
-export interface TTSSettings {
-  default_service: string;
-  aws_polly_voice?: string;
-  elevenlabs_voice_id?: string;
-  elevenlabs_stability?: number;
-  elevenlabs_similarity_boost?: number;
-  api_key?: string;
-}
-
-export interface ConvertButtonProps {
-  text: string;
-  fileName: string;
-  onProgress: (progress: number) => void;
-  onComplete: () => void;
-  onError: (error: string) => void;
-  disabled?: boolean;
-  iconOnly?: boolean;
-}
-
-
 export interface UserProfile {
   username: string | null;
   full_name: string | null;
@@ -105,6 +94,7 @@ export interface UserWithProfile {
   email: string | null;
   profiles: UserProfile | null;
 }
+
 export interface UserUsageStats {
   userId: string;
   email: string | null;
@@ -140,5 +130,19 @@ export interface DatabaseUser {
         username: string | null;
         full_name: string | null;
       }[]
-    | null; // Change to array since Supabase returns it as array
+    | null; // Supabase returns it as array
+}
+
+// Added from the second file
+export interface Message {
+  id: string;
+  text: string;
+  timestamp: Date;
+  audioUrl?: string;
+  status: "idle" | "converting" | "playing" | "paused" | "error";
+  error?: string;
+  currentTime?: number;
+  duration?: number;
+  voice_id?: string;
+  tts_service?: string;
 }

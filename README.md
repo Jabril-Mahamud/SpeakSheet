@@ -51,8 +51,8 @@ SheetSpeak is a **PDF to Audio Converter** that transforms PDFs into high-qualit
 - [x] **Expansion function**: Add support for expanding text from simple bullet points.
 - [ ] **Google TTS Integration**: Implement Google TTS as an additional voice option.
 - [ ] **Audiobook Library Management**: Enable organization and storage of converted audio.
-- [ ] **Cross-Device Syncing**: Ensure seamless playback across multiple devices.
-- [ ] **Mobile Usability Optimization**: Improve UI/UX for mobile users.
+- [x] **Cross-Device Syncing**: Ensure seamless playback across multiple devices.
+- [x] **Mobile Usability Optimization**: Improve UI/UX for mobile users.
 
 ## TODO
 - Implement **Google TTS integration**
