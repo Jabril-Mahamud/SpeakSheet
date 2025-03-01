@@ -27,13 +27,6 @@ const FREE_VOICES = [
 
 type FreeVoiceId = typeof FREE_VOICES[number];
 
-// Rate limit configuration
-const RATE_LIMIT = {
-  maxRequests: 100,    // requests
-  windowMs: 60 * 1000, // per minute
-  endpoint: '/api/tts'
-};
-
 // Initialize the Polly client with default credentials
 const getPollyClient = (credentials?: { accessKeyId: string; secretAccessKey: string }) => {
   return new PollyClient({
