@@ -36,29 +36,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
-
-// Reuse the existing types
-interface TTSSettings {
-  tts_service: "Amazon" | "ElevenLabs";
-  api_key?: string;
-  aws_polly_voice?: string;
-  elevenlabs_voice_id?: string;
-  elevenlabs_stability?: number;
-  elevenlabs_similarity_boost?: number;
-}
-
-interface Message {
-  id: string;
-  text: string;
-  timestamp: Date;
-  audioUrl?: string;
-  status: "idle" | "converting" | "playing" | "paused" | "error";
-  error?: string;
-  currentTime?: number;
-  duration?: number;
-  voice_id?: string; // Add this property
-  tts_service?: string; // Add this property
-}
+import { Message, TTSSettings } from "@/utils/types";
 
 export default function EnhancedTTSChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
