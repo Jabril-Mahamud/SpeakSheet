@@ -13,7 +13,7 @@ import { FileDialog } from "./FileDialog";
 import { useRealTimeFiles } from "@/hooks/useRealTimeFiles";
 import { FilterButton } from "../common/FilterButton";
 
-type FilterType = "all" | "txt" | "audio";
+type FilterType = "all" | "txt" | "audio" | "chat_message";
 
 export function FileGrid({ files: initialFiles }: { files: FileData[] }) {
   const [filter, setFilter] = useState<FilterType>("all");
@@ -40,6 +40,16 @@ export function FileGrid({ files: initialFiles }: { files: FileData[] }) {
   };
 
   const filteredFiles = files.filter((file) => {
+    // Handle chat_message files separately
+    const isChatMessage = file.original_name.startsWith("chat_message");
+    
+    // If we're specifically viewing chat messages, only show those
+    if (filter === "chat_message") return isChatMessage;
+    
+    // For all other filter types, exclude chat messages
+    if (isChatMessage) return false;
+    
+    // Then apply the regular type filters
     if (filter === "all") return true;
     if (filter === "txt") return file.file_type === "text/plain";
     if (filter === "audio") return file.file_type.includes("audio");
@@ -49,7 +59,7 @@ export function FileGrid({ files: initialFiles }: { files: FileData[] }) {
   return (
     <>
       <div className="space-y-6">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <FilterButton
             active={filter === "all"}
             onClick={() => setFilter("all")}
@@ -67,6 +77,12 @@ export function FileGrid({ files: initialFiles }: { files: FileData[] }) {
             onClick={() => setFilter("audio")}
           >
             Audio Files
+          </FilterButton>
+          <FilterButton
+            active={filter === "chat_message"}
+            onClick={() => setFilter("chat_message")}
+          >
+            Chat Messages
           </FilterButton>
         </div>
 
