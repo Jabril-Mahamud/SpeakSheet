@@ -45,7 +45,7 @@ async function synthesizeWithNeuphonic(
         headers: {
           "Content-Type": "application/json",
           "X-API-KEY": apiKey,
-          Accept: "text/event-stream", // Original setting
+          Accept: "text/event-stream", 
         },
         body: JSON.stringify(payload),
       }
