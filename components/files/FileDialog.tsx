@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import { useState, useRef, useEffect } from "react";
 import {
@@ -8,7 +8,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Download, Loader2, Volume2, VolumeX } from "lucide-react";
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Download,
+  Loader2,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { FileUploadForm } from "./FileUploadForm";
 import { createClient } from "@/utils/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,10 +30,10 @@ import { FileDialogProps } from "@/utils/types";
 export function FileDialog({
   title = "Upload Files",
   file = null,
-  mode = 'upload',
+  mode = "upload",
   open = false,
   onOpenChange,
-  content = '',
+  content = "",
 }: FileDialogProps) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -38,20 +46,41 @@ export function FileDialog({
   const router = useRouter();
   const { loading, handleDownload } = useFileManager();
 
+  // Update to FileDialog.tsx - simplified version
   useEffect(() => {
-    if (file && file.file_type.includes('audio') && open) {
+    if (file && file.file_type.includes("audio") && open) {
       const loadAudio = async () => {
         try {
           const { data, error } = await supabase.storage
-            .from('files')
+            .from("files")
             .download(file.file_path);
 
           if (error) throw error;
 
-          const url = URL.createObjectURL(data);
-          setAudioUrl(url);
+          // Create a blob with the correct MIME type
+          const blob = new Blob([data], { type: "audio/mpeg" });
+          const url = URL.createObjectURL(blob);
+
+          console.log("Created audio URL:", url);
+
+          // Test if the audio is valid before setting it
+          const audio = new Audio();
+          audio.onloadedmetadata = () => {
+            console.log("Audio metadata loaded successfully, audio is valid");
+            setAudioUrl(url);
+          };
+          audio.onerror = (e) => {
+            console.error("Audio preload test failed:", e);
+            URL.revokeObjectURL(url);
+            // Try alternative method - different content type
+            const alternativeBlob = new Blob([data], { type: "audio/mp3" });
+            const alternativeUrl = URL.createObjectURL(alternativeBlob);
+            console.log("Trying alternative URL with audio/mp3 type");
+            setAudioUrl(alternativeUrl);
+          };
+          audio.src = url;
         } catch (error) {
-          console.error('Error loading audio:', error);
+          console.error("Error loading audio:", error);
         }
       };
 
@@ -135,7 +164,7 @@ export function FileDialog({
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -143,7 +172,7 @@ export function FileDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] w-[90vw]">
         <DialogHeader className="px-6 py-4 flex flex-row items-center justify-between">
           <DialogTitle className="text-xl">
-            {mode === 'view' && file ? file.original_name : title}
+            {mode === "view" && file ? file.original_name : title}
           </DialogTitle>
           <div className="flex items-center gap-2">
             {file?.file_type === "text/plain" && (
@@ -156,7 +185,7 @@ export function FileDialog({
                   onOpenChange?.(false);
                 }}
                 onError={(error) => {
-                  console.error('Conversion error:', error);
+                  console.error("Conversion error:", error);
                 }}
               />
             )}
@@ -187,18 +216,18 @@ export function FileDialog({
                     onOpenChange?.(false);
                   }}
                   onError={(error) => {
-                    console.error('Delete error:', error);
+                    console.error("Delete error:", error);
                   }}
                 />
               </>
             )}
           </div>
         </DialogHeader>
-       
+
         <div className="p-6">
-          {mode === 'upload' ? (
+          {mode === "upload" ? (
             <FileUploadForm onSuccess={() => onOpenChange?.(false)} />
-          ) : file?.file_type.includes('audio') ? (
+          ) : file?.file_type.includes("audio") ? (
             <div className="space-y-6">
               <audio
                 ref={audioRef}
@@ -206,8 +235,30 @@ export function FileDialog({
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
                 onEnded={() => setIsPlaying(false)}
+                onError={(e) => {
+                  // Detailed error logging for audio element errors
+                  console.error("Audio error event:", e);
+                  const mediaError = e.currentTarget.error;
+                  if (mediaError) {
+                    console.error("Media error code:", mediaError.code);
+                    console.error("Media error message:", mediaError.message);
+
+                    // Display error codes in human-readable form
+                    const errorTypes = {
+                      1: "MEDIA_ERR_ABORTED - The user aborted the download",
+                      2: "MEDIA_ERR_NETWORK - A network error occurred",
+                      3: "MEDIA_ERR_DECODE - A decoding error occurred",
+                      4: "MEDIA_ERR_SRC_NOT_SUPPORTED - The source format is not supported",
+                    };
+
+                    console.error(
+                      "Error explanation:",
+                      errorTypes[mediaError.code] || "Unknown error"
+                    );
+                  }
+                }}
               />
-              
+
               <div className="flex items-center justify-center gap-6">
                 <Button
                   variant="outline"

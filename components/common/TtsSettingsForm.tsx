@@ -38,6 +38,9 @@ export default function TtsSettingsForm() {
     elevenlabs_stability: 0.5,
     elevenlabs_similarity_boost: 0.75,
     custom_voice_id: "",
+    neuphonic_voice_id: "",
+    neuphonic_lang_code: "en",
+    neuphonic_model: "neu_hq",
   });
 
   const [voices, setVoices] = useState<Record<string, Voice[]>>({});
@@ -48,6 +51,19 @@ export default function TtsSettingsForm() {
   const [hasCustomCredentials, setHasCustomCredentials] = useState(false);
   const { toast } = useToast();
   const supabase = createClient();
+
+  const neuphonicLanguages = [
+    { code: "en", name: "English" },
+    { code: "de", name: "German" },
+    { code: "es", name: "Spanish" },
+    { code: "fr", name: "French" },
+    { code: "it", name: "Italian" },
+    { code: "pt", name: "Portuguese" },
+    { code: "pl", name: "Polish" },
+    { code: "nl", name: "Dutch" },
+    { code: "tr", name: "Turkish" },
+    { code: "ru", name: "Russian" }
+  ];
 
   useEffect(() => {
     fetchSettings();
@@ -128,7 +144,7 @@ export default function TtsSettingsForm() {
         .maybeSingle();
 
       if (data) {
-        setSettings(data);
+        setSettings(prev => ({...prev, ...data}));
         if (data.tts_service === "ElevenLabs" && data.api_key) {
           fetchElevenLabsVoices();
         }
@@ -140,6 +156,8 @@ export default function TtsSettingsForm() {
             tts_service: "Amazon",
             aws_polly_voice:
               process.env.NEXT_PUBLIC_AWS_POLLY_VOICE || "Joanna",
+            neuphonic_lang_code: "en",
+            neuphonic_model: "neu_hq",
           });
 
         if (insertError) throw insertError;
@@ -174,9 +192,11 @@ export default function TtsSettingsForm() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error();
 
-      const voiceIdToSave =
+      const voiceIdToSave = 
         settings.tts_service === "ElevenLabs"
           ? settings.custom_voice_id || settings.elevenlabs_voice_id
+          : settings.tts_service === "Neuphonic"
+          ? settings.neuphonic_voice_id
           : settings.aws_polly_voice;
 
       const { error } = await supabase.from("user_tts_settings").upsert({
@@ -184,6 +204,8 @@ export default function TtsSettingsForm() {
         ...settings,
         [settings.tts_service === "ElevenLabs"
           ? "elevenlabs_voice_id"
+          : settings.tts_service === "Neuphonic"
+          ? "neuphonic_voice_id" 
           : "aws_polly_voice"]: voiceIdToSave,
         updated_at: new Date().toISOString(),
       });
@@ -225,6 +247,7 @@ export default function TtsSettingsForm() {
           <SelectContent>
             <SelectItem value="Amazon">Amazon Polly (Default)</SelectItem>
             <SelectItem value="ElevenLabs">ElevenLabs</SelectItem>
+            <SelectItem value="Neuphonic">Neuphonic</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -419,6 +442,73 @@ export default function TtsSettingsForm() {
                 }
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {settings.tts_service === "Neuphonic" && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Language</Label>
+            <Select
+              value={settings.neuphonic_lang_code}
+              onValueChange={(value) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  neuphonic_lang_code: value,
+                }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select language" />
+              </SelectTrigger>
+              <SelectContent>
+                {neuphonicLanguages.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Voice ID</Label>
+            <Input
+              type="text"
+              placeholder="Enter voice ID (leave empty for default voice)"
+              value={settings.neuphonic_voice_id}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  neuphonic_voice_id: e.target.value,
+                }))
+              }
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter the voice ID provided by Neuphonic. Leave empty to use the default voice.
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Model</Label>
+            <Select
+              value={settings.neuphonic_model}
+              onValueChange={(value) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  neuphonic_model: value,
+                }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="neu_hq">neu_hq (High Quality)</SelectItem>
+                <SelectItem value="neu_base">neu_base (Standard)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       )}

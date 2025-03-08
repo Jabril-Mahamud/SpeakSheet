@@ -19,12 +19,15 @@ interface ConvertButtonProps {
 }
 
 interface TTSSettings {
-  tts_service: 'Amazon' | 'ElevenLabs';
+  tts_service: 'Amazon' | 'ElevenLabs' | 'Neuphonic';
   api_key?: string;
   aws_polly_voice?: string;
   elevenlabs_voice_id?: string;
   elevenlabs_stability?: number;
   elevenlabs_similarity_boost?: number;
+  neuphonic_voice_id?: string;
+  neuphonic_lang_code?: string;
+  neuphonic_model?: string;
 }
 
 export function ConvertButton(props: ConvertButtonProps) {
@@ -58,6 +61,8 @@ export function ConvertButton(props: ConvertButtonProps) {
     switch (service) {
       case 'ElevenLabs':
         return "/api/convert-audio/elevenlabs";
+      case 'Neuphonic':
+        return "/api/convert-audio/neuphonic";
       case 'Amazon':
       default:
         return "/api/convert-audio/polly";
@@ -68,6 +73,8 @@ export function ConvertButton(props: ConvertButtonProps) {
     switch (settings.tts_service) {
       case 'ElevenLabs':
         return settings.elevenlabs_voice_id;
+      case 'Neuphonic':
+        return settings.neuphonic_voice_id;
       case 'Amazon':
       default:
         return settings.aws_polly_voice;
@@ -95,16 +102,27 @@ export function ConvertButton(props: ConvertButtonProps) {
       const endpoint = getEndpointForService(settings.tts_service);
       const voiceId = getVoiceIdForService(settings);
 
-      const requestBody = {
+      let requestBody: any = {
         text: props.text,
         voiceId,
         originalFilename: baseName,
-        ...(settings.tts_service === 'ElevenLabs' && {
-          apiKey: settings.api_key,
+        apiKey: settings.api_key
+      };
+
+      // Add service-specific parameters
+      if (settings.tts_service === 'ElevenLabs') {
+        requestBody = {
+          ...requestBody,
           stability: settings.elevenlabs_stability,
           similarityBoost: settings.elevenlabs_similarity_boost
-        })
-      };
+        };
+      } else if (settings.tts_service === 'Neuphonic') {
+        requestBody = {
+          ...requestBody,
+          langCode: settings.neuphonic_lang_code,
+          model: settings.neuphonic_model
+        };
+      }
 
       const response = await fetch(endpoint, {
         method: "POST",
