@@ -1,67 +1,54 @@
 # SheetSpeak
 
 ## Overview
-SheetSpeak is a **PDF to Audio Converter** that transforms PDFs into high-quality speech using AI-driven text-to-speech (TTS) services. Users can upload files or simply type in the chat page, select from multiple voice options, and generate natural-sounding audio files. Future updates will include audiobook organization and cross-device syncing.
+
+SheetSpeak transforms PDFs or typed text into natural-sounding audio by integrating three leading AI-powered TTS providers—AWS Polly, Google Cloud Text-to-Speech, and ElevenLabs. With tiered subscriptions, users can choose the plan that best fits their needs.
+
+---
+
+## Subscription Tiers & Pricing
+
+| Tier        | Price (USD/month) | Minutes Included | TTS Providers                                |
+|:------------|:------------------|:-----------------:|:---------------------------------------------|
+| **Free**    | $0                | 10 min            | AWS Polly, Google TTS, ElevenLabs             |
+| **Basic**   | $9.99             | 60 min            | AWS Polly, Google TTS, ElevenLabs             |
+| **Premium** | $29.99            | 300 min           | AWS Polly, Google TTS, ElevenLabs             |
+
+> **Note:** All tiers include the same suite of TTS providers. Unused minutes do *not* roll over.
+
+---
 
 ## Features
-- **PDF to Audio Conversion**: Upload a PDF and convert it to speech.
-- **Multiple TTS Services**: Supports Amazon Polly and ElevenLabs, with planned integration for Google TTS.
-- **File Upload with Supabase**: Securely upload and process files using Supabase.
-- **Voice Selection**: Choose from a variety of voices across different TTS providers.
-- **Future Audiobook Library**: Organize and store converted audio for easy access.
+
+- **PDF → Audio**: Convert full documents in one click.  
+- **Live Text Chat**: Instant synthesis of pasted or typed text.  
+- **Voice Customization**: Adjust speed, pitch, and gender.  
+- **Secure Storage**: Supabase-backed file uploads and management.  
+- **Audio Library** (Premium): Save, organize, and sync your past conversions.
+
+---
 
 ## Tech Stack
-- **Next.js** (App Router)
-- **Tailwind CSS** (UI Styling)
-- **Framer Motion** (Animations)
-- **Lucide-react** (Icons)
-- **tsparticles** (Background Particles)
-- **AWS Polly & ElevenLabs (Live), Google TTS (Planned)** (Text-to-Speech APIs)
-- **Supabase** (backend)
-- **Vercel** (deployment)
-- **PostHog** (Analytics)
+
+- **Frontend**: Next.js (App Router), Tailwind CSS, Framer Motion  
+- **Backend**: Next.js API Routes, Supabase (Postgres, Storage, Auth), Stripe  
+- **TTS Engines**: AWS Polly, Google Cloud Text-to-Speech, ElevenLabs  
+- **Analytics & Deployment**: PostHog, Vercel  
+
+---
+
+## Development Approach
+
+1. **Backend-First**: Implement subscription logic, Stripe webhooks, and TTS integrations.  
+2. **API Design**: RESTful endpoints for auth, subscriptions, uploads, and conversion jobs.  
+3. **Schema**: Users, Subscriptions, Conversion Jobs, and Usage Records.  
+4. **Frontend**: Build UI flows for signup, billing, upload/conversion, and library playback.
+
+---
 
 ## Installation
-1. Clone the repository:
+
+1. Clone the repository:  
+
    ```bash
    git clone https://github.com/your-repo/SheetSpeak.git
-   ```
-2. Navigate to the project folder:
-   ```bash
-   cd SheetSpeak
-   ```
-3. Install dependencies:
-   ```bash
-   npm install
-   ```
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Usage
-1. Upload a PDF.
-2. Select a voice and convert the text to speech.
-3. Download the generated audio file.
-
-## Roadmap
-- [x] **AWS Polly Usage Tracking**: Implement monitoring to prevent excessive API costs.
-- [x] **ElevenLabs Integration**: Add support for ElevenLabs TTS.
-- [x] **Expansion function**: Add support for expanding text from simple bullet points.
-- [ ] **Google TTS Integration**: Implement Google TTS as an additional voice option.
-- [ ] **Audiobook Library Management**: Enable organization and storage of converted audio.
-- [x] **Cross-Device Syncing**: Ensure seamless playback across multiple devices.
-- [x] **Mobile Usability Optimization**: Improve UI/UX for mobile users.
-
-## TODO
-- Implement **Google TTS integration**
-- Enhance mobile responsiveness
-- Add audiobook library features
-
-## License
-This project is licensed under the MIT License.
-
-## Contributing
-Contributions are welcome! Feel free to submit a pull request or suggest features via issues.
-
