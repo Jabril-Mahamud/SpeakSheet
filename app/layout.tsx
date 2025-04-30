@@ -1,7 +1,6 @@
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
-import { CSPostHogProvider } from '../utils/providers';
 import Header from "@/components/header";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -28,7 +27,6 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <CSPostHogProvider>
             <main className="min-h-screen flex flex-col items-center">
               <div className="flex-1 w-full flex flex-col gap-20 items-center">
                 <Header />
@@ -51,7 +49,6 @@ export default function RootLayout({
                 </footer>
               </div>
             </main>
-          </CSPostHogProvider>
         </ThemeProvider>
       </body>
     </html>
