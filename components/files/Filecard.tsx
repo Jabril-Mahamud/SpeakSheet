@@ -1,62 +1,32 @@
-// components/FileCard.tsx
-import React from 'react';
+import React from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, File, Eye, Headphones } from "lucide-react";
+import { FileText, Eye, Headphones, File } from "lucide-react";
 import { formatDate } from "@/utils/dateFormat";
 
-// This component will display files with proper naming for duplicates
-function FileCard({ 
-  file, 
-  fileNames,
-  onView, 
-  onDelete, 
-  onConvert 
-}: { 
+interface FileCardProps {
   file: any;
-  fileNames: Record<string, number>;
-  onView: () => void; 
-  onDelete: () => void; 
-  onConvert: () => void; 
-}) {
-  // Get base name without extension
-  const getBaseName = (filename: string) => {
-    return filename.split('.')[0];
-  };
+  onView: () => void;
+  onDelete: () => void;
+  onConvert: () => void;
+}
 
-  // Get display name with counter if needed
-  const getDisplayName = () => {
-    const originalName = file.original_name;
-    const baseName = getBaseName(originalName);
-    
-    // If this is the first file with this name, just display the original name
-    if (fileNames[baseName] === 1) {
-      return originalName;
-    }
-    
-    // Otherwise, determine which number this file is
-    const count = Object.values(fileNames).filter(id => id === file.id).length + 1;
-    const extension = originalName.split('.').pop();
-    
-    return `${baseName}-${count}.${extension}`;
-  };
-  
-  // Function to get file icon based on file type
-  const getFileIcon = (fileType: string) => {
-    if (fileType.includes('pdf')) {
-      return <FileText className="h-8 w-8 text-red-500" />;
-    } else if (fileType.includes('doc')) {
-      return <FileText className="h-8 w-8 text-blue-500" />;
-    } else {
-      return <File className="h-8 w-8 text-gray-500" />;
-    }
-  };
+export function getFileIcon(fileType: string, originalName: string) {
+  if (originalName.toLowerCase().endsWith('.pdf')) {
+    return <FileText className="h-8 w-8 text-red-500" />;
+  } else if (originalName.toLowerCase().endsWith('.doc') || originalName.toLowerCase().endsWith('.docx')) {
+    return <FileText className="h-8 w-8 text-blue-500" />;
+  } else {
+    return <File className="h-8 w-8 text-gray-500" />;
+  }
+}
 
+export function FileCard({ file, onView, onDelete, onConvert }: FileCardProps) {
   return (
     <div className="flex items-center justify-between p-4 rounded-lg border hover:shadow-md transition-shadow">
       <div className="flex items-center gap-4">
-        {getFileIcon(file.file_type || '')}
+        {getFileIcon(file.file_type || '', file.original_name || '')}
         <div>
-          <h3 className="font-medium">{getDisplayName()}</h3>
+          <h3 className="font-medium">{file.displayName || file.original_name}</h3>
           <p className="text-sm text-muted-foreground">
             Uploaded on {formatDate(file.created_at)}
             {file.character_count && ` • ${file.character_count} characters`}
@@ -111,5 +81,3 @@ function FileCard({
     </div>
   );
 }
-
-export default FileCard;
