@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
 import { cookies } from 'next/headers';
+// Import the PDF utilities directly
+import { extractTextFromPdf, extractTextFromTextFile } from '@/utils/lib/pdf-utils';
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -28,10 +30,6 @@ export async function POST(request: NextRequest) {
     const fileIds: string[] = [];
     const errors: string[] = [];
     
-    // Get authentication cookies
-    const cookieStore = cookies();
-    const sessionCookie = cookieStore.get('sb-session');
-    
     for (const file of files) {
       try {
         const fileId = uuidv4();
@@ -50,45 +48,30 @@ export async function POST(request: NextRequest) {
         let textContent = '';
         let characterCount = 0;
         
+        // Get file buffer
+        const buffer = await file.arrayBuffer();
+        
         if (fileExtension === 'pdf') {
-          // For PDFs, use our conversion endpoint
-          const pdfFormData = new FormData();
-          pdfFormData.append('file', file);
-          
           try {
-            // We'll use the current hostname to build the API URL
-            const apiUrl = new URL('/api/convert', request.url).toString();
-            console.log('Calling PDF conversion endpoint:', apiUrl);
+            // Use the PDF utility directly instead of calling an API
+            console.log('Processing PDF file:', originalName);
+            const result = await extractTextFromPdf(buffer, originalName);
+            textContent = result.text;
+            characterCount = result.characterCount;
             
-            // Forward the request with the current user's session
-            const response = await fetch(apiUrl, {
-              method: 'POST',
-              body: pdfFormData,
-              headers: {
-                // Pass all the cookie values
-                Cookie: request.headers.get('cookie') || ''
-              }
-            });
-            
-            if (!response.ok) {
-              const errorData = await response.json();
-              console.error('PDF conversion response error:', errorData);
-              throw new Error(errorData.error || 'PDF conversion failed');
+            if (!textContent || textContent.trim() === '') {
+              throw new Error('PDF extraction produced empty content');
             }
-            
-            const data = await response.json();
-            textContent = data.text;
-            characterCount = data.characterCount;
           } catch (conversionError) {
             console.error('PDF conversion error:', conversionError);
             errors.push(`Failed to convert PDF: ${conversionError instanceof Error ? conversionError.message : 'Unknown error'}`);
             continue;
           }
         } else if (fileExtension === 'txt') {
-          // For text files, directly convert buffer to string
-          const buffer = await file.arrayBuffer();
-          textContent = new TextDecoder().decode(buffer);
-          characterCount = textContent.length;
+          // For text files, use the text file utility
+          const result = extractTextFromTextFile(buffer, originalName);
+          textContent = result.text;
+          characterCount = result.characterCount;
         }
         
         // Create a clean display name without extension
