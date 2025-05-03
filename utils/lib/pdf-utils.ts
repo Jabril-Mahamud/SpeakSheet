@@ -1,4 +1,4 @@
-// utils/lib/pdf-utils.ts (simplified version)
+// utils/lib/pdf-utils.ts
 import { v4 as uuidv4 } from 'uuid';
 import pdfParse from 'pdf-parse';
 
@@ -15,8 +15,12 @@ export async function extractTextFromPdf(buffer: ArrayBuffer): Promise<{ text: s
     // Use pdf-parse with default options
     const data = await pdfParse(nodeBuffer);
     
-    // Get the text content
-    const textContent = data.text;
+    // Clean up the text content
+    const textContent = data.text
+      .replace(/\r\n/g, '\n') // Normalize line endings
+      .replace(/([a-z])- ([a-z])/g, '$1$2') // Fix hyphenated words
+      .replace(/\s{2,}/g, ' ') // Remove multiple spaces
+      .trim();
     
     // Count characters
     const characterCount = textContent.length;

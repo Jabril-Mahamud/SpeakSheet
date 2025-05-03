@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
           
           try {
             // We'll use the current hostname to build the API URL
-            const apiUrl = new URL('/api/convert/pdf-to-text', request.url).toString();
+            const apiUrl = new URL('/api/convert', request.url).toString();
             console.log('Calling PDF conversion endpoint:', apiUrl);
             
             // Forward the request with the current user's session
