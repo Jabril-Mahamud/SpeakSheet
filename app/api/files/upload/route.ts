@@ -2,19 +2,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-// Correct import for pdf2json
-import PdfParser from 'pdf2json';
+import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   
   // Check authentication
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   
-  if (!user) {
+  if (!user || authError) {
+    console.error('Authentication error:', authError);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   
@@ -31,41 +28,14 @@ export async function POST(request: NextRequest) {
     const fileIds: string[] = [];
     const errors: string[] = [];
     
-    // First, get a list of existing files to check for duplicates
-    const { data: existingFiles, error: listError } = await supabase
-      .from('files')
-      .select('original_name')
-      .eq('user_id', user.id);
-      
-    if (listError) {
-      console.error('Error fetching existing files:', listError);
-      // Continue anyway, just won't have duplicate detection
-    }
-    
-    // Create a map of filenames and their counts
-    const filenameCounts: Record<string, number> = {};
-    
-    // Populate the map with existing files
-    if (existingFiles) {
-      existingFiles.forEach(file => {
-        // Get the basename without extension
-        const baseName = file.original_name.split('.')[0];
-        if (filenameCounts[baseName]) {
-          filenameCounts[baseName]++;
-        } else {
-          filenameCounts[baseName] = 1;
-        }
-      });
-    }
+    // Get authentication cookies
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get('sb-session');
     
     for (const file of files) {
       try {
         const fileId = uuidv4();
         const originalName = file.name;
-        const fileType = file.type;
-        
-        // Get file basename (without extension)
-        const baseName = originalName.split('.')[0];
         
         // Extract the file extension for processing
         const fileExtension = originalName.split('.').pop()?.toLowerCase() || '';
@@ -76,100 +46,58 @@ export async function POST(request: NextRequest) {
           continue;
         }
         
-        // Determine if we need a numbered filename
-        if (!filenameCounts[baseName]) {
-          filenameCounts[baseName] = 1;
-        } else {
-          filenameCounts[baseName]++;
-        }
-        
-        // Create numbered filename if it's a duplicate
-        const count = filenameCounts[baseName];
-        const displayName = count > 1 ? `${baseName}-${count}` : baseName;
-        
-        // Convert file to buffer for processing
-        const buffer = await file.arrayBuffer();
-        
-        // Extract text from the file
+        // Extract text content based on file type
         let textContent = '';
         let characterCount = 0;
         
         if (fileExtension === 'pdf') {
+          // For PDFs, use our conversion endpoint
+          const pdfFormData = new FormData();
+          pdfFormData.append('file', file);
+          
           try {
-            const tempDir = os.tmpdir();
-            const tempPdfPath = path.join(tempDir, `${fileId}_temp.pdf`);
+            // We'll use the current hostname to build the API URL
+            const apiUrl = new URL('/api/convert/pdf-to-text', request.url).toString();
+            console.log('Calling PDF conversion endpoint:', apiUrl);
             
-            // Write the buffer to a temporary file
-            fs.writeFileSync(tempPdfPath, Buffer.from(buffer));
+            // Forward the request with the current user's session
+            const response = await fetch(apiUrl, {
+              method: 'POST',
+              body: pdfFormData,
+              headers: {
+                // Pass all the cookie values
+                Cookie: request.headers.get('cookie') || ''
+              }
+            });
             
-            // Create a promise wrapper for pdf2json
-            const extractPdfText = () => {
-              return new Promise<string>((resolve, reject) => {
-                // Create PdfParser instance correctly
-                const pdfParser = new PdfParser();
-                
-                pdfParser.on("pdfParser_dataError", (errData) => {
-                  console.error('PDF parsing error:', errData);
-                  reject(new Error('PDF parsing failed'));
-                });
-                
-                pdfParser.on("pdfParser_dataReady", (pdfData) => {
-                  try {
-                    // Convert PDF data to text
-                    const pages = pdfData.Pages || [];
-                    let text = '';
-                    
-                    // Extract text from each page
-                    for (const page of pages) {
-                      const texts = page.Texts || [];
-                      for (const textItem of texts) {
-                        // Decode the text elements
-                        const decodedText = decodeURIComponent(textItem.R.map(r => r.T).join(' '));
-                        text += decodedText + ' ';
-                      }
-                      // Add newline between pages
-                      text += '\n\n';
-                    }
-                    
-                    resolve(text.trim());
-                  } catch (err) {
-                    console.error('Error processing PDF data:', err);
-                    reject(new Error('Error extracting text from PDF'));
-                  }
-                });
-                
-                // Load and parse the PDF file
-                pdfParser.loadPDF(tempPdfPath);
-              });
-            };
-            
-            // Extract the text
-            textContent = await extractPdfText();
-            
-            // Clean up the temporary file
-            fs.unlinkSync(tempPdfPath);
-            
-            // If text extraction failed but didn't throw an error
-            if (!textContent || textContent.trim() === '') {
-              textContent = '[PDF text extraction failed - The PDF may be scanned or contain only images]';
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.error('PDF conversion response error:', errorData);
+              throw new Error(errorData.error || 'PDF conversion failed');
             }
             
-          } catch (pdfError) {
-            console.error('Error parsing PDF:', pdfError);
-            textContent = '[PDF parsing error - The PDF may be encrypted or corrupted]';
+            const data = await response.json();
+            textContent = data.text;
+            characterCount = data.characterCount;
+          } catch (conversionError) {
+            console.error('PDF conversion error:', conversionError);
+            errors.push(`Failed to convert PDF: ${conversionError instanceof Error ? conversionError.message : 'Unknown error'}`);
+            continue;
           }
         } else if (fileExtension === 'txt') {
           // For text files, directly convert buffer to string
+          const buffer = await file.arrayBuffer();
           textContent = new TextDecoder().decode(buffer);
+          characterCount = textContent.length;
         }
         
-        // Count characters after extraction
-        characterCount = textContent.length;
+        // Create a clean display name without extension
+        const baseName = originalName.substring(0, originalName.lastIndexOf('.'));
+        const displayName = baseName || 'unnamed';
         
-        // Use the display name for storage
-        const textFilePath = `${user.id}/${displayName}.txt`;
+        // Store the text content
+        const textFilePath = `${user.id}/${displayName}-${fileId}.txt`;
         
-        // Save ONLY the text content to storage
         const { error: textUploadError } = await supabase.storage
           .from('files')
           .upload(textFilePath, textContent);
@@ -177,16 +105,16 @@ export async function POST(request: NextRequest) {
         if (textUploadError) {
           console.error('Error uploading text content:', textUploadError);
           errors.push(`Failed to save text content for ${originalName}: ${textUploadError.message}`);
-          continue; // Skip if we can't save the text content
+          continue;
         }
         
-        // Store file metadata in the database - note that file_path now points to the text file
+        // Store file metadata in the database
         const { error: dbError } = await supabase.from('files').insert({
           id: fileId,
           user_id: user.id,
-          file_path: textFilePath,  // Points to the text file with the display name
-          file_type: 'text/plain',  // Always text/plain since we only store text
-          original_name: originalName,  // Keep original name for reference
+          file_path: textFilePath,
+          file_type: 'text/plain',
+          original_name: originalName,
           character_count: characterCount,
           conversion_status: 'completed'
         });
