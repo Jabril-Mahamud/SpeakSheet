@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "http/": "https://deno.land/std@0.177.0/http/",
+    "http/server": "https://deno.land/std@0.177.0/http/server.ts",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.38.4",
+    "uuid": "https://esm.sh/uuid@9.0.0",
+    "pdfjs-dist": "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/+esm"
+  }
+}
