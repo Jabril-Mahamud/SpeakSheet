@@ -2,137 +2,156 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { v4 as uuidv4 } from 'uuid';
-import { cookies } from 'next/headers';
-// Import the PDF utilities directly
-import { extractTextFromPdf, extractTextFromTextFile } from '@/utils/lib/pdf-utils';
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
-  
-  // Check authentication
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  
+
+  // ─── Auth ─────────────────────────────────────────────────────────────────
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
   if (!user || authError) {
-    console.error('Authentication error:', authError);
+    console.error('Auth error:', authError);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  
+
+  // ─── OCR.space Key ─────────────────────────────────────────────────────────
+  const OCR_SPACE_API_KEY = process.env.OCR_SPACE_API_KEY;
+  if (!OCR_SPACE_API_KEY) {
+    console.error('Missing OCR_SPACE_API_KEY');
+    return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+  }
+
   try {
-    // Create a FormData instance
     const formData = await request.formData();
     const files = formData.getAll('files') as File[];
-    
-    if (!files || files.length === 0) {
+    if (!files.length) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });
     }
-    
-    // Process each file
+
     const fileIds: string[] = [];
     const errors: string[] = [];
-    
+
     for (const file of files) {
-      try {
-        const fileId = uuidv4();
-        const originalName = file.name;
-        
-        // Extract the file extension for processing
-        const fileExtension = originalName.split('.').pop()?.toLowerCase() || '';
-        const allowedExtensions = ['pdf', 'txt'];
-        
-        if (!allowedExtensions.includes(fileExtension)) {
-          errors.push(`Unsupported file type: ${fileExtension}. Only PDF and TXT files are supported currently.`);
-          continue;
-        }
-        
-        // Extract text content based on file type
-        let textContent = '';
-        let characterCount = 0;
-        
-        // Get file buffer
-        const buffer = await file.arrayBuffer();
-        
-        if (fileExtension === 'pdf') {
-          try {
-            // Use the PDF utility directly instead of calling an API
-            console.log('Processing PDF file:', originalName);
-            const result = await extractTextFromPdf(buffer, originalName);
-            textContent = result.text;
-            characterCount = result.characterCount;
-            
-            if (!textContent || textContent.trim() === '') {
-              throw new Error('PDF extraction produced empty content');
-            }
-          } catch (conversionError) {
-            console.error('PDF conversion error:', conversionError);
-            errors.push(`Failed to convert PDF: ${conversionError instanceof Error ? conversionError.message : 'Unknown error'}`);
-            continue;
-          }
-        } else if (fileExtension === 'txt') {
-          // For text files, use the text file utility
-          const result = extractTextFromTextFile(buffer, originalName);
-          textContent = result.text;
-          characterCount = result.characterCount;
-        }
-        
-        // Create a clean display name without extension
-        const baseName = originalName.substring(0, originalName.lastIndexOf('.'));
-        const displayName = baseName || 'unnamed';
-        
-        // Store the text content
-        const textFilePath = `${user.id}/${displayName}-${fileId}.txt`;
-        
-        const { error: textUploadError } = await supabase.storage
-          .from('files')
-          .upload(textFilePath, textContent);
-        
-        if (textUploadError) {
-          console.error('Error uploading text content:', textUploadError);
-          errors.push(`Failed to save text content for ${originalName}: ${textUploadError.message}`);
-          continue;
-        }
-        
-        // Store file metadata in the database
-        const { error: dbError } = await supabase.from('files').insert({
-          id: fileId,
-          user_id: user.id,
-          file_path: textFilePath,
-          file_type: 'text/plain',
-          original_name: originalName,
-          character_count: characterCount,
-          conversion_status: 'completed'
-        });
-        
-        if (dbError) {
-          console.error('Error saving file metadata:', dbError);
-          errors.push(`Failed to save metadata for ${originalName}: ${dbError.message}`);
-          continue;
-        }
-        
-        fileIds.push(fileId);
-      } catch (fileError) {
-        console.error('Error processing file:', fileError);
-        errors.push(`Error processing ${file.name}: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
+      const fileId = uuidv4();
+      const originalName = file.name;
+      const ext = originalName.split('.').pop()?.toLowerCase() || '';
+      if (ext !== 'pdf' && ext !== 'txt') {
+        errors.push(`Unsupported file type: ${ext}`);
+        continue;
       }
+
+      let textContent = '';
+      let characterCount = 0;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+
+        if (ext === 'pdf') {
+          // ── Call OCR.space API ────────────────────────────────────────────────
+          const apiForm = new FormData();
+          apiForm.append('apikey', OCR_SPACE_API_KEY);
+          apiForm.append('language', 'eng');                // adjust as needed
+          apiForm.append('isOverlayRequired', 'false');
+          apiForm.append(
+            'file',
+            new Blob([arrayBuffer], { type: 'application/pdf' }),
+            originalName
+          );
+
+          const apiRes = await fetch('https://api.ocr.space/parse/image', {
+            method: 'POST',
+            body: apiForm,
+          });
+
+          if (!apiRes.ok) {
+            const errBody = await apiRes.text();
+            throw new Error(`OCR.space ${apiRes.status}: ${errBody}`);
+          }
+
+          const json = await apiRes.json() as any;
+          if (
+            !json.ParsedResults ||
+            !json.ParsedResults.length ||
+            !json.ParsedResults[0].ParsedText
+          ) {
+            throw new Error('No text returned from OCR.space');
+          }
+
+          textContent = json.ParsedResults[0].ParsedText as string;
+          characterCount = textContent.length;
+        } else {
+          // ── TXT file branch ──────────────────────────────────────────────────
+          const decoder = new TextDecoder();
+          textContent = decoder.decode(arrayBuffer);
+          characterCount = textContent.length;
+        }
+
+        if (!textContent.trim()) {
+          throw new Error('Empty text after conversion');
+        }
+      } catch (e) {
+        console.error('Conversion error:', e);
+        errors.push(
+          `Failed to convert ${originalName}: ${e instanceof Error ? e.message : e}`
+        );
+        continue;
+      }
+
+      // ─── Upload text to Supabase Storage ───────────────────────────────────
+      const baseName = originalName.replace(/\.[^/.]+$/, '');
+      const displayName = baseName || 'unnamed';
+      const textFilePath = `${user.id}/${displayName}-${fileId}.txt`;
+
+      const uploadBlob = new Blob([textContent], { type: 'text/plain' });
+      const { error: uploadErr } = await supabase.storage
+        .from('files')
+        .upload(textFilePath, uploadBlob);
+
+      if (uploadErr) {
+        console.error('Storage upload error:', uploadErr);
+        errors.push(`Save error for ${originalName}: ${uploadErr.message}`);
+        continue;
+      }
+
+      // ─── Insert metadata into Postgres ────────────────────────────────────
+      const { error: dbErr } = await supabase.from('files').insert({
+        id: fileId,
+        user_id: user.id,
+        file_path: textFilePath,
+        file_type: 'text/plain',
+        original_name: originalName,
+        character_count: characterCount,
+        conversion_status: 'completed',
+      });
+
+      if (dbErr) {
+        console.error('DB insert error:', dbErr);
+        errors.push(`Metadata save failed for ${originalName}: ${dbErr.message}`);
+        continue;
+      }
+
+      fileIds.push(fileId);
     }
-    
-    // Return appropriate response based on results
-    if (fileIds.length > 0) {
+
+    // ─── Response ────────────────────────────────────────────────────────────
+    if (fileIds.length) {
       return NextResponse.json({
-        message: `${fileIds.length} file(s) processed and text content saved successfully${errors.length > 0 ? ' with some errors' : ''}`,
+        message: `${fileIds.length} file(s) processed successfully`,
         fileIds,
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length ? errors : undefined,
       });
     } else {
-      return NextResponse.json(
-        { error: 'Failed to process all files', errors },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'All conversions failed', errors }, { status: 500 });
     }
-    
-  } catch (error) {
-    console.error('File upload error:', error);
+  } catch (err) {
+    console.error('Unexpected error:', err);
     return NextResponse.json(
-      { error: 'An error occurred during file processing', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Server error during upload',
+        details: err instanceof Error ? err.message : String(err),
+      },
       { status: 500 }
     );
   }
