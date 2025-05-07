@@ -12,11 +12,11 @@ CREATE TABLE IF NOT EXISTS public.subscription_tiers (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Create subscriptions table
+-- Create subscriptions table - note tier_id no longer has an inline reference
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users NOT NULL,
-  tier_id INTEGER REFERENCES public.subscription_tiers NOT NULL,
+  tier_id INTEGER NOT NULL, -- Removed inline REFERENCES
   stripe_subscription_id TEXT,
   stripe_customer_id TEXT,
   status TEXT NOT NULL, -- 'active', 'canceled', 'past_due', etc.
@@ -26,6 +26,13 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+-- Add the explicit foreign key constraint with ON DELETE CASCADE
+ALTER TABLE public.subscriptions
+  ADD CONSTRAINT fk_subscriptions_tier
+    FOREIGN KEY (tier_id)
+    REFERENCES public.subscription_tiers (id)
+    ON DELETE CASCADE;
 
 -- Create tts_usage table to track character usage
 CREATE TABLE IF NOT EXISTS public.tts_usage (
