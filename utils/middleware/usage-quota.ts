@@ -66,8 +66,8 @@ export async function checkUsageQuota(
       );
       
       // Default to free tier if no subscription found
-      const tierName = tierInfo?.subscription_tiers?.name || 'Free';
-      const tierLimit = tierInfo?.subscription_tiers?.character_limit || 1000;
+      const tierName = tierInfo?.subscription_tiers?.[0]?.name || 'Free';
+      const tierLimit = tierInfo?.subscription_tiers?.[0]?.character_limit || 1000;
       
       return {
         allowed: false,

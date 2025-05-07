@@ -5,7 +5,11 @@ import { checkUsageQuota, trackUsage } from '@/utils/middleware/usage-quota';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   PollyClient, 
-  SynthesizeSpeechCommand 
+  SynthesizeSpeechCommand,
+  Engine,
+  OutputFormat,
+  TextType,
+  SynthesizeSpeechCommandOutput
 } from '@aws-sdk/client-polly';
 import crypto from 'crypto';
 
@@ -143,29 +147,43 @@ export async function POST(request: NextRequest) {
       region
     );
     
-    // Configure speech synthesis parameters
+    // Configure speech synthesis parameters with proper type casting
     const params = {
-      Engine: voiceId?.includes('neural') ? 'neural' : 'standard',
-      OutputFormat: 'mp3',
+      Engine: (voiceId?.includes('neural') ? 'neural' : 'standard') as Engine,
+      OutputFormat: 'mp3' as OutputFormat,
       Text: text,
-      TextType: 'text',
+      TextType: 'text' as TextType,
       VoiceId: voiceId || 'Joanna'
     };
     
     // Synthesize speech
     const command = new SynthesizeSpeechCommand(params);
-    const { AudioStream } = await polly.send(command);
+    const response = await polly.send(command);
     
     // Convert AudioStream to Buffer
     const chunks: Uint8Array[] = [];
-    if (AudioStream) {
-      for await (const chunk of AudioStream) {
-        chunks.push(chunk);
-      }
-    }
-    const buffer = Buffer.concat(chunks);
     
-    // Upload audio file to Supabase Storage
+    // Handle AWS SDK v3 stream which uses Node.js streams
+    if (response.AudioStream) {
+      // AWS SDK v3 returns a Node.js stream for AudioStream
+      return new Promise<Buffer>((resolve, reject) => {
+        const audioStream = response.AudioStream as unknown as NodeJS.ReadableStream;
+        
+        audioStream.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+        
+        audioStream.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve(buffer);
+        });
+        
+        audioStream.on('error', (err) => {
+          reject(err);
+        });
+      }).then(async buffer => {
+    
+        // Upload audio file to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('files')
       .upload(`${user.id}/${fileId}.mp3`, buffer, {
@@ -203,8 +221,16 @@ export async function POST(request: NextRequest) {
       contentHash
     );
     
-    // Return the file ID
-    return NextResponse.json({ fileId });
+        // Return the file ID
+        return NextResponse.json({ fileId });
+      });
+    }
+    
+    // This code runs if AudioStream was null (unlikely but possible)
+    return NextResponse.json(
+      { error: "Failed to generate audio stream" },
+      { status: 500 }
+    );
     
   } catch (error) {
     console.error('TTS conversion error:', error);

@@ -305,7 +305,7 @@ export default function SubscriptionPage() {
           </div>
           
           {usage && usage.current > usage.limit * 0.8 && (
-            <Alert variant="warning" className="mt-6">
+            <Alert variant="destructive" className="mt-6">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Almost at your limit!</AlertTitle>
               <AlertDescription>

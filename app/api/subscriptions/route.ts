@@ -76,10 +76,13 @@ export async function GET(request: NextRequest) {
       user_id_param: user.id
     });
     
+    // Access the first item in the subscription_tiers array
+    const subscriptionTier = subscription.subscription_tiers[0];
+    
     const usage = {
       current: usageData || 0,
-      limit: subscription.subscription_tiers.character_limit,
-      remaining: Math.max(0, subscription.subscription_tiers.character_limit - (usageData || 0))
+      limit: subscriptionTier.character_limit,
+      remaining: Math.max(0, subscriptionTier.character_limit - (usageData || 0))
     };
     
     return NextResponse.json({ subscription, usage });
