@@ -67,6 +67,7 @@
     "reactflow": "^11.11.4",
     "recharts": "^2.15.0",
     "sonner": "^1.7.2",
+    "stripe": "^18.1.0",
     "supports-color": "^10.0.0",
     "tsparticles": "^3.8.1",
     "tsparticles-slim": "^2.12.0",

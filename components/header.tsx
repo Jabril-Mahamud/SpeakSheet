@@ -2,6 +2,7 @@ import Link from "next/link";
 import HeaderAuth from "./header-auth";
 import NameHoverCard from "./common/HoverCard";
 import { createClient } from "@/utils/supabase/server";
+import { CreditCard } from "lucide-react";
 
 export default async function Header() {
   const supabase = await createClient();
@@ -18,6 +19,10 @@ export default async function Header() {
             <>
               <Link href={"/files"}>Files</Link>
               <Link href={"/chat"}>Chat</Link>
+              <Link href={"/protected/subscription"} className="flex items-center gap-1 text-primary">
+                <CreditCard className="h-4 w-4" />
+                Subscription
+              </Link>
             </>
           )}
           
