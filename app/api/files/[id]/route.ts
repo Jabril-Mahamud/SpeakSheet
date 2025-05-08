@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
-export async function DELETE(
+export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -22,54 +22,42 @@ export async function DELETE(
   }
   
   try {
-    // First, get the file record to verify ownership and get file path
-    const { data: fileRecord, error: fileError } = await supabase
+    // Get the file details
+    const { data: file, error } = await supabase
       .from('files')
       .select('*')
       .eq('id', fileId)
       .eq('user_id', user.id)
       .single();
     
-    if (fileError || !fileRecord) {
+    if (error || !file) {
       return NextResponse.json(
-        { error: 'File not found or you do not have permission to delete it' },
+        { error: 'File not found or you do not have permission to access it' },
         { status: 404 }
       );
     }
     
-    // Delete the text file from storage
-    const { error: deleteError } = await supabase.storage
+    // Generate a signed URL for the file
+    const { data: urlData, error: urlError } = await supabase.storage
       .from('files')
-      .remove([fileRecord.file_path]);
+      .createSignedUrl(file.file_path, 3600); // 1 hour expiry
     
-    if (deleteError) {
-      console.error('Error deleting text file:', deleteError);
+    if (urlError) {
       return NextResponse.json(
-        { error: 'Failed to delete text file' },
+        { error: 'Failed to generate audio URL' },
         { status: 500 }
       );
     }
     
-    // Delete the file record from the database
-    const { error: dbDeleteError } = await supabase
-      .from('files')
-      .delete()
-      .eq('id', fileId);
-    
-    if (dbDeleteError) {
-      console.error('Error deleting file record:', dbDeleteError);
-      return NextResponse.json(
-        { error: 'Failed to delete file record' },
-        { status: 500 }
-      );
-    }
-    
-    return NextResponse.json({ message: 'File deleted successfully' });
+    return NextResponse.json({
+      ...file,
+      audioUrl: urlData.signedUrl
+    });
     
   } catch (error) {
-    console.error('Error deleting file:', error);
+    console.error('Error retrieving file:', error);
     return NextResponse.json(
-      { error: 'An error occurred while deleting the file' },
+      { error: 'An error occurred while retrieving the file' },
       { status: 500 }
     );
   }

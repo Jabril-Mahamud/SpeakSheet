@@ -3,9 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const limit = parseInt(searchParams.get('limit') || '20', 10);
-  
   const supabase = await createClient();
   
   // Check authentication
@@ -29,7 +26,7 @@ export async function GET(request: NextRequest) {
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(20);
     
     if (error) {
       throw error;
@@ -123,86 +120,6 @@ export async function POST(request: NextRequest) {
     console.error('Error saving message:', error);
     return NextResponse.json(
       { error: 'Failed to save message' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const messageId = searchParams.get('id');
-  
-  if (!messageId) {
-    return NextResponse.json({ error: 'Message ID is required' }, { status: 400 });
-  }
-  
-  const supabase = await createClient();
-  
-  // Check authentication
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  
-  try {
-    // Get the message to check if it has a file
-    const { data: message, error: messageError } = await supabase
-      .from('speech_messages')
-      .select('file_id')
-      .eq('id', messageId)
-      .eq('user_id', user.id)
-      .single();
-    
-    if (messageError) {
-      return NextResponse.json(
-        { error: 'Message not found or you do not have permission to delete it' },
-        { status: 404 }
-      );
-    }
-    
-    // Delete the message
-    const { error: deleteError } = await supabase
-      .from('speech_messages')
-      .delete()
-      .eq('id', messageId)
-      .eq('user_id', user.id);
-    
-    if (deleteError) {
-      throw deleteError;
-    }
-    
-    // If the message has a file, delete it too
-    if (message.file_id) {
-      // First get the file path
-      const { data: fileData, error: fileError } = await supabase
-        .from('files')
-        .select('file_path')
-        .eq('id', message.file_id)
-        .eq('user_id', user.id)
-        .single();
-      
-      if (!fileError && fileData) {
-        // Delete from storage
-        await supabase.storage
-          .from('files')
-          .remove([fileData.file_path]);
-        
-        // Delete from database
-        await supabase
-          .from('files')
-          .delete()
-          .eq('id', message.file_id)
-          .eq('user_id', user.id);
-      }
-    }
-    
-    return NextResponse.json({ message: 'Message deleted successfully' });
-    
-  } catch (error) {
-    console.error('Error deleting message:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete message' },
       { status: 500 }
     );
   }
