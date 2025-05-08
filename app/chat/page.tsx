@@ -106,13 +106,16 @@ export default function EnhancedTTSChatPage() {
     try {
       const {
         data: { user },
+        error: authError
       } = await supabase.auth.getUser();
-      if (!user) {
+      
+      if (authError || !user) {
+        console.error("Auth error:", authError);
         setIsLoading(false);
         return;
       }
 
-      // Fetch previous messages
+      // Fetch previous messages using your API
       const response = await fetch("/api/tts-messages?limit=20");
       if (response.ok) {
         const data = await response.json();
@@ -200,12 +203,9 @@ export default function EnhancedTTSChatPage() {
     setIsProcessing(true);
 
     try {
-      // Determine which endpoint to use based on selected service
-      const endpoint = selectedService === "ElevenLabs" 
-        ? "/api/convert-audio/elevenlabs" 
-        : "/api/convert-audio/polly";
-
+      // Use the generic TTS service endpoint
       const requestBody = {
+        tts_service: selectedService,
         text: newMessage.text,
         voiceId: selectedVoice,
         originalFilename: `chat_message_${messageId}`,
@@ -215,7 +215,7 @@ export default function EnhancedTTSChatPage() {
         }),
       };
 
-      const response = await fetch(endpoint, {
+      const response = await fetch("/api/convert-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -226,7 +226,7 @@ export default function EnhancedTTSChatPage() {
 
         // Handle specific error cases
         if (response.status === 401) {
-          throw new Error("Authentication required. Please check your API key.");
+          throw new Error("Authentication required. Please sign in again.");
         } else if (response.status === 429) {
           setHasRateLimitError(true);
           throw new Error("Usage limit exceeded. Please try again later.");
@@ -244,24 +244,17 @@ export default function EnhancedTTSChatPage() {
         throw new Error("No file ID returned from conversion");
       }
 
-      // Fetch the file record to get the correct path
-      const { data: fileRecord, error: fileError } = await supabase
-        .from("files")
-        .select("file_path")
-        .eq("id", fileId)
-        .single();
-
-      if (fileError || !fileRecord) {
-        throw new Error("Failed to retrieve file information");
-      }
-
-      // Now create a signed URL using the correct file path
-      const { data: fileData } = await supabase.storage
-        .from("files")
-        .createSignedUrl(fileRecord.file_path, 3600);
-
-      if (!fileData?.signedUrl) {
+      // Get the audio URL from our API
+      const audioUrlResponse = await fetch(`/api/files/${fileId}/audio-url`);
+      
+      if (!audioUrlResponse.ok) {
         throw new Error("Failed to get audio URL");
+      }
+      
+      const audioUrlData = await audioUrlResponse.json();
+      
+      if (!audioUrlData.signedUrl) {
+        throw new Error("No audio URL returned");
       }
 
       // Update the message with audio URL
@@ -270,7 +263,7 @@ export default function EnhancedTTSChatPage() {
           msg.id === messageId
             ? {
                 ...msg,
-                audioUrl: fileData.signedUrl,
+                audioUrl: audioUrlData.signedUrl,
                 status: "idle",
                 voice_id: selectedVoice,
                 tts_service: selectedService,
@@ -299,7 +292,7 @@ export default function EnhancedTTSChatPage() {
       }
 
       // Create an audio element reference
-      const audio = new Audio(fileData.signedUrl);
+      const audio = new Audio(audioUrlData.signedUrl);
       audioRefs.current[messageId] = audio;
 
       // Set up audio metadata handling
@@ -338,6 +331,7 @@ export default function EnhancedTTSChatPage() {
       );
 
       if (errorMessage.includes("Usage limit exceeded")) {
+        setHasRateLimitError(true);
         setShowLimitDialog(true);
       } else {
         toast({
