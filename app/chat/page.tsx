@@ -3,6 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Headphones,
@@ -10,7 +17,6 @@ import {
   Pause,
   Play,
   Trash2,
-  Settings,
   AlertTriangle,
   Volume2,
   Loader2,
@@ -36,119 +42,39 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
-import { Message, TTSSettings } from "@/utils/types";
+import { Message } from "@/utils/types";
 
 export default function EnhancedTTSChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [settings, setSettings] = useState<TTSSettings | null>(null);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [hasRateLimitError, setHasRateLimitError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedService, setSelectedService] = useState("Amazon");
+  const [selectedVoice, setSelectedVoice] = useState("Joanna");
+  
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
   const supabase = createClient();
 
-  // Fetch user settings and previous messages on component mount
+  // Fetch previous messages on component mount
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          setIsLoading(false);
-          return;
-        }
-
-        // Fetch user settings
-        const { data: settingsData } = await supabase
-          .from("user_tts_settings")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        setSettings(
-          settingsData || {
-            tts_service: "Amazon",
-            aws_polly_voice: "Joanna",
-          }
-        );
-
-        // Fetch previous messages
-        const response = await fetch("/api/tts-messages?limit=20");
-        if (response.ok) {
-          const data = await response.json();
-
-          // Convert the fetched messages to our local format
-          const formattedMessages = data.messages.map((msg: any) => ({
-            id: msg.id,
-            text: msg.text,
-            timestamp: new Date(msg.created_at),
-            audioUrl: msg.audioUrl,
-            status: "idle",
-            duration: undefined,
-            currentTime: 0,
-            voice_id: msg.voice_id, // Store the voice ID from the database
-            tts_service: msg.tts_service, // Store the TTS service from the database
-          }));
-
-          setMessages(formattedMessages);
-
-          // Pre-create Audio objects for each message with audio
-          formattedMessages.forEach((msg: Message) => {
-            // Add explicit type here
-            if (msg.audioUrl) {
-              const audio = new Audio(msg.audioUrl);
-              audioRefs.current[msg.id] = audio;
-
-              // Set up audio metadata handling
-              audio.addEventListener("loadedmetadata", () => {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === msg.id ? { ...m, duration: audio.duration } : m
-                  )
-                );
-              });
-
-              // Set up time update handling
-              audio.addEventListener("timeupdate", () => {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === msg.id
-                      ? { ...m, currentTime: audio.currentTime }
-                      : m
-                  )
-                );
-              });
-            }
-          });
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load your settings or messages",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
+    fetchPreviousMessages();
+  }, []);
+  
+  // Handle voice selection when service changes
+  useEffect(() => {
+    // Set default voice when service changes
+    if (selectedService === "Amazon") {
+      setSelectedVoice("Joanna");
+    } else {
+      setSelectedVoice("21m00Tcm4TlvDq8ikWAM"); // Rachel voice for ElevenLabs
     }
-
-    fetchData();
-
-    // Show help dialog on first visit
-    const hasSeenHelp = localStorage.getItem("tts_chat_help_seen");
-    if (!hasSeenHelp) {
-      setShowHelpDialog(true);
-      localStorage.setItem("tts_chat_help_seen", "true");
-    }
-  }, [supabase]);
+  }, [selectedService]);
 
   // Auto-scroll to the latest message
   useEffect(() => {
@@ -176,23 +102,73 @@ export default function EnhancedTTSChatPage() {
     }
   }, [inputText]);
 
-  const getEndpointForService = (service: string) => {
-    switch (service) {
-      case "ElevenLabs":
-        return "/api/convert-audio/elevenlabs";
-      case "Amazon":
-      default:
-        return "/api/convert-audio/polly";
-    }
-  };
+  const fetchPreviousMessages = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
 
-  const getVoiceIdForService = (settings: TTSSettings) => {
-    switch (settings.tts_service) {
-      case "ElevenLabs":
-        return settings.elevenlabs_voice_id;
-      case "Amazon":
-      default:
-        return settings.aws_polly_voice;
+      // Fetch previous messages
+      const response = await fetch("/api/tts-messages?limit=20");
+      if (response.ok) {
+        const data = await response.json();
+
+        // Convert the fetched messages to our local format
+        const formattedMessages = data.messages.map((msg: any) => ({
+          id: msg.id,
+          text: msg.text,
+          timestamp: new Date(msg.created_at),
+          audioUrl: msg.audioUrl,
+          status: "idle",
+          duration: undefined,
+          currentTime: 0,
+          voice_id: msg.voice_id, // Store the voice ID from the database
+          tts_service: msg.tts_service, // Store the TTS service from the database
+        }));
+
+        setMessages(formattedMessages);
+
+        // Pre-create Audio objects for each message with audio
+        formattedMessages.forEach((msg: Message) => {
+          if (msg.audioUrl) {
+            const audio = new Audio(msg.audioUrl);
+            audioRefs.current[msg.id] = audio;
+
+            // Set up audio metadata handling
+            audio.addEventListener("loadedmetadata", () => {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msg.id ? { ...m, duration: audio.duration } : m
+                )
+              );
+            });
+
+            // Set up time update handling
+            audio.addEventListener("timeupdate", () => {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msg.id
+                    ? { ...m, currentTime: audio.currentTime }
+                    : m
+                )
+              );
+            });
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load your messages",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -201,16 +177,12 @@ export default function EnhancedTTSChatPage() {
       e.preventDefault();
     }
 
-    if (!inputText.trim() || !settings || isProcessing) {
+    if (!inputText.trim() || isProcessing) {
       return;
     }
 
     // Check if user has hit rate limit before
-    if (
-      hasRateLimitError &&
-      settings.tts_service === "Amazon" &&
-      !settings.api_key
-    ) {
+    if (hasRateLimitError) {
       setShowLimitDialog(true);
       return;
     }
@@ -228,17 +200,18 @@ export default function EnhancedTTSChatPage() {
     setIsProcessing(true);
 
     try {
-      const endpoint = getEndpointForService(settings.tts_service);
-      const voiceId = getVoiceIdForService(settings);
+      // Determine which endpoint to use based on selected service
+      const endpoint = selectedService === "ElevenLabs" 
+        ? "/api/convert-audio/elevenlabs" 
+        : "/api/convert-audio/polly";
 
       const requestBody = {
         text: newMessage.text,
-        voiceId,
+        voiceId: selectedVoice,
         originalFilename: `chat_message_${messageId}`,
-        ...(settings.tts_service === "ElevenLabs" && {
-          apiKey: settings.api_key,
-          stability: settings.elevenlabs_stability,
-          similarityBoost: settings.elevenlabs_similarity_boost,
+        ...(selectedService === "ElevenLabs" && {
+          stability: 0.5,
+          similarityBoost: 0.75,
         }),
       };
 
@@ -249,20 +222,14 @@ export default function EnhancedTTSChatPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: "Conversion failed" }));
+        const errorData = await response.json();
 
         // Handle specific error cases
         if (response.status === 401) {
-          throw new Error(
-            "Authentication required. Please check your API key."
-          );
+          throw new Error("Authentication required. Please check your API key.");
         } else if (response.status === 429) {
           setHasRateLimitError(true);
-          throw new Error(
-            "Usage limit exceeded. Please add custom AWS credentials or try again next month."
-          );
+          throw new Error("Usage limit exceeded. Please try again later.");
         }
 
         throw new Error(errorData.error || "Conversion failed");
@@ -270,7 +237,7 @@ export default function EnhancedTTSChatPage() {
 
       const data = await response.json();
 
-      // Get the file path from the response
+      // Get the file ID from the response
       const fileId = data.fileId;
 
       if (!fileId) {
@@ -305,8 +272,8 @@ export default function EnhancedTTSChatPage() {
                 ...msg,
                 audioUrl: fileData.signedUrl,
                 status: "idle",
-                voice_id: voiceId,
-                tts_service: settings.tts_service,
+                voice_id: selectedVoice,
+                tts_service: selectedService,
               }
             : msg
         )
@@ -322,8 +289,8 @@ export default function EnhancedTTSChatPage() {
           body: JSON.stringify({
             fileId: fileId,
             text: newMessage.text,
-            voiceId: voiceId,
-            ttsService: settings.tts_service,
+            voiceId: selectedVoice,
+            ttsService: selectedService,
           }),
         });
       } catch (error) {
@@ -494,8 +461,12 @@ export default function EnhancedTTSChatPage() {
       Kimberly: "bg-indigo-100 text-indigo-700",
       Kevin: "bg-cyan-100 text-cyan-700",
 
-      // Add more voices and colors as needed
-      // ElevenLabs voices could be handled here too
+      // ElevenLabs voice IDs
+      "21m00Tcm4TlvDq8ikWAM": "bg-teal-100 text-teal-700", // Rachel
+      "AZnzlk1XvdvUeBnXmlld": "bg-orange-100 text-orange-700", // Domi
+      "EXAVITQu4vr4xnSDxMaL": "bg-rose-100 text-rose-700", // Bella
+      "VR6AewLTigWG4xnSOukaG": "bg-emerald-100 text-emerald-700", // Adam
+      "pNInz6obpgDQGcFmaJgB": "bg-blue-100 text-blue-700", // Sam
     };
 
     // Try to match by name
@@ -528,12 +499,36 @@ export default function EnhancedTTSChatPage() {
     return (currentTime / duration) * 100;
   };
 
+  // Get the display name for a voice
+  const getVoiceDisplayName = (id: string): string => {
+    const voiceMap: Record<string, string> = {
+      // Amazon Polly voices
+      "Joanna": "Joanna (Female)",
+      "Matthew": "Matthew (Male)",
+      "Salli": "Salli (Female)",
+      "Justin": "Justin (Male)",
+      "Joey": "Joey (Male)",
+      "Kendra": "Kendra (Female)",
+      "Kimberly": "Kimberly (Female)",
+      "Kevin": "Kevin (Male)",
+      
+      // ElevenLabs voices
+      "21m00Tcm4TlvDq8ikWAM": "Rachel (Female)",
+      "AZnzlk1XvdvUeBnXmlld": "Domi (Female)",
+      "EXAVITQu4vr4xnSDxMaL": "Bella (Female)",
+      "VR6AewLTigWG4xnSOukaG": "Adam (Male)",
+      "pNInz6obpgDQGcFmaJgB": "Sam (Male)",
+    };
+    
+    return voiceMap[id] || id;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary mb-4 mx-auto" />
-          <p className="text-lg font-medium">Loading your speech settings...</p>
+          <p className="text-lg font-medium">Loading your messages...</p>
         </div>
       </div>
     );
@@ -564,38 +559,8 @@ export default function EnhancedTTSChatPage() {
                   <TooltipContent>How to use this tool</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => router.push("/protected")}
-                      className="rounded-full bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800"
-                    >
-                      <Settings className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Voice settings</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
           </div>
-
-          {settings && (
-            <div className="flex items-center mt-2 px-1 text-sm text-muted-foreground">
-              <p>
-                Current voice:{" "}
-                <span className="font-medium">
-                  {settings.aws_polly_voice ||
-                    settings.elevenlabs_voice_id ||
-                    "Default"}
-                </span>{" "}
-                ({settings.tts_service})
-              </p>
-            </div>
-          )}
         </CardHeader>
 
         <CardContent className="p-0">
@@ -628,20 +593,13 @@ export default function EnhancedTTSChatPage() {
                       <div className="p-4">
                         <div className="flex justify-between items-start mb-3">
                           <p className="text-base flex-1">{message.text}</p>
-                          {settings && (
-                            <div
-                              className={`text-sm px-2 py-1 rounded-md ml-3 shrink-0 ${getVoiceColor(
-                                message.voice_id ||
-                                  settings.aws_polly_voice ||
-                                  settings.elevenlabs_voice_id
-                              )}`}
-                            >
-                              {message.voice_id ||
-                                settings.aws_polly_voice ||
-                                settings.elevenlabs_voice_id ||
-                                "Default"}
-                            </div>
-                          )}
+                          <div
+                            className={`text-sm px-2 py-1 rounded-md ml-3 shrink-0 ${getVoiceColor(
+                              message.voice_id
+                            )}`}
+                          >
+                            {message.voice_id ? getVoiceDisplayName(message.voice_id) : "Default Voice"}
+                          </div>
                         </div>
 
                         {message.status === "converting" ? (
@@ -744,64 +702,107 @@ export default function EnhancedTTSChatPage() {
               className="p-4 border-t"
               aria-label="Message input form"
             >
-              <div className="flex gap-3">
-                <Textarea
-                  ref={textareaRef}
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Type your message here..."
-                  className="resize-none min-h-[60px] text-base p-3"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSubmit();
-                    }
-                  }}
-                  aria-label="Message text"
-                />
-                <Button
-                  type="submit"
-                  className="h-auto px-6 rounded-full bg-primary hover:bg-primary/90"
-                  disabled={
-                    !inputText.trim() ||
-                    isProcessing ||
-                    (hasRateLimitError &&
-                      settings?.tts_service === "Amazon" &&
-                      !settings?.api_key)
-                  }
-                  aria-label="Convert to speech"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                      Converting...
-                    </>
-                  ) : (
-                    <>
-                      <Headphones className="h-5 w-5 mr-2" />
-                      Speak
-                    </>
-                  )}
-                </Button>
+              <div className="flex flex-col gap-4">
+                <div className="flex gap-3">
+                  <Select
+                    value={selectedService}
+                    onValueChange={setSelectedService}
+                    disabled={isProcessing}
+                  >
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Amazon">AWS Polly</SelectItem>
+                      <SelectItem value="ElevenLabs">ElevenLabs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select
+                    value={selectedVoice}
+                    onValueChange={setSelectedVoice}
+                    disabled={isProcessing}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Voice" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedService === "Amazon" ? (
+                        <>
+                          <SelectItem value="Joanna">Joanna (Female)</SelectItem>
+                          <SelectItem value="Matthew">Matthew (Male)</SelectItem>
+                          <SelectItem value="Salli">Salli (Female)</SelectItem>
+                          <SelectItem value="Justin">Justin (Male)</SelectItem>
+                          <SelectItem value="Joey">Joey (Male)</SelectItem>
+                          <SelectItem value="Kendra">Kendra (Female)</SelectItem>
+                          <SelectItem value="Kimberly">Kimberly (Female)</SelectItem>
+                          <SelectItem value="Kevin">Kevin (Male)</SelectItem>
+                        </>
+                      ) : (
+                        <>
+                          <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel (Female)</SelectItem>
+                          <SelectItem value="AZnzlk1XvdvUeBnXmlld">Domi (Female)</SelectItem>
+                          <SelectItem value="EXAVITQu4vr4xnSDxMaL">Bella (Female)</SelectItem>
+                          <SelectItem value="VR6AewLTigWG4xnSOukaG">Adam (Male)</SelectItem>
+                          <SelectItem value="pNInz6obpgDQGcFmaJgB">Sam (Male)</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Textarea
+                    ref={textareaRef}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Type your message here..."
+                    className="resize-none min-h-[60px] text-base p-3"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSubmit();
+                      }
+                    }}
+                    aria-label="Message text"
+                  />
+                  <Button
+                    type="submit"
+                    className="h-auto px-6 rounded-full bg-primary hover:bg-primary/90"
+                    disabled={!inputText.trim() || isProcessing}
+                    aria-label="Convert to speech"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                        Converting...
+                      </>
+                    ) : (
+                      <>
+                        <Headphones className="h-5 w-5 mr-2" />
+                        Speak
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              {hasRateLimitError &&
-                settings?.tts_service === "Amazon" &&
-                !settings?.api_key && (
-                  <Alert variant="destructive" className="mt-3">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Usage limit exceeded</AlertTitle>
-                    <AlertDescription>
-                      You've reached your monthly speech limit.
-                      <Button
-                        variant="link"
-                        className="h-auto p-0 text-destructive-foreground underline ml-1"
-                        onClick={() => setShowLimitDialog(true)}
-                      >
-                        Learn more
-                      </Button>
-                    </AlertDescription>
-                  </Alert>
-                )}
+
+              {hasRateLimitError && (
+                <Alert variant="destructive" className="mt-3">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Usage limit exceeded</AlertTitle>
+                  <AlertDescription>
+                    You've reached your monthly speech limit.
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-destructive-foreground underline ml-1"
+                      onClick={() => setShowLimitDialog(true)}
+                    >
+                      Learn more
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
             </form>
           </div>
         </CardContent>
@@ -823,19 +824,9 @@ export default function EnhancedTTSChatPage() {
           <div className="space-y-4">
             <Alert variant="destructive">
               <AlertDescription className="text-base">
-                To continue converting text to speech, you need to add your own
-                AWS credentials or wait until next month.
+                To continue converting text to speech, please try again later.
               </AlertDescription>
             </Alert>
-
-            <div className="text-sm">
-              <p className="font-medium mb-1">How to fix this:</p>
-              <ol className="list-decimal pl-4 space-y-1">
-                <li>Go to Settings</li>
-                <li>Add your own AWS credentials</li>
-                <li>Return to this page and continue using the service</li>
-              </ol>
-            </div>
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -845,15 +836,6 @@ export default function EnhancedTTSChatPage() {
               className="sm:flex-1"
             >
               Close
-            </Button>
-            <Button
-              onClick={() => {
-                setShowLimitDialog(false);
-                router.push("/protected");
-              }}
-              className="sm:flex-1"
-            >
-              Go to Settings
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -878,11 +860,10 @@ export default function EnhancedTTSChatPage() {
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
                   1
                 </div>
-                Type a message
+                Select a voice service
               </h3>
               <p className="text-muted-foreground ml-8">
-                Enter the text you want to hear in the message box at the
-                bottom.
+                Choose between AWS Polly and ElevenLabs for different voice options.
               </p>
             </div>
 
@@ -891,11 +872,10 @@ export default function EnhancedTTSChatPage() {
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
                   2
                 </div>
-                Click "Speak"
+                Select a voice
               </h3>
               <p className="text-muted-foreground ml-8">
-                Press the Speak button or hit Enter to convert your text to
-                speech.
+                Choose from a variety of male and female voices.
               </p>
             </div>
 
@@ -904,11 +884,10 @@ export default function EnhancedTTSChatPage() {
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
                   3
                 </div>
-                Listen to speech
+                Type your message
               </h3>
               <p className="text-muted-foreground ml-8">
-                Your message will be converted and begin playing automatically.
-                Use the play/pause button to control playback.
+                Enter the text you want to hear in the message box.
               </p>
             </div>
 
@@ -917,11 +896,11 @@ export default function EnhancedTTSChatPage() {
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
                   4
                 </div>
-                Change voice settings
+                Click "Speak"
               </h3>
               <p className="text-muted-foreground ml-8">
-                Click the settings icon to change voices or add your own AWS
-                credentials.
+                Your message will be converted and begin playing automatically.
+                Use the play/pause button to control playback.
               </p>
             </div>
           </div>
